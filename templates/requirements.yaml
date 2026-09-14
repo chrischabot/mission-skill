@@ -1,0 +1,78 @@
+# .mission/requirements.yaml — machine-readable requirement registry (M+ missions)
+#
+# Authored text lives in SPEC.md; this file mirrors it (same id, same text) and adds status and oracles.
+# The three entries below are a worked EXAMPLE: replace them with this mission's requirements before the spec gate.
+# Validate with:  python3 .mission/bin/validate-registry.py --registry .mission/requirements.yaml --tests <test dirs> --spec .mission/SPEC.md
+# Keep to the YAML subset documented in scripts/validate-registry.py (quote any value containing ': ' or ' #').
+#
+# Schema per entry (required: id, text, owner, status; oracle_kind unless withdrawn):
+#   id           <DOMAIN>-<NNN> (L/XL, e.g. API-012) · REQ-<NNN> (M) · OUT-<NNN> (outcomes) · BUG-<n>-<C|E|U><n> (bugfix clauses)
+#                never renumbered, never reused; removed ids stay with status withdrawn
+#   text         verbatim copy of the SPEC.md sentence (EARS; MUST/SHALL in capitals)
+#   kind         outcome | requirement | nfr | metric | bugfix | parity | content-claim | test-architecture
+#   ears         ubiquitous | event | state | optional | unwanted | complex | none
+#   owner        exactly one owning component or role
+#   priority     P1 | P2 | P3
+#   milestone    M<n>
+#   status       planned | implemented | verified | live-only | withdrawn
+#                implemented = maker claims done (oracles required) · verified = set only by a verifier after the gate
+#                live-only = cannot be simulated honestly; stays PENDING-LIVE until the live check runs
+#   oracle_kind  [unit | property | contract | integration | scenario | e2e | visual | a11y | live | human | review]
+#   oracles      list of "<repo-relative path>::<test name>"; add only once the file exists; the file MUST contain @req:<id>
+#   live         list of "<doc path>::<check name>" for live checks
+#   fixtures     failure fixtures that inject the unwanted condition
+#   sources      URLs (content claims, platform limits)
+#   supersedes   id this entry replaces
+#   notes        one line; demotions record the gap here
+#
+# Example of an implemented entry once its test exists (uncomment and adapt):
+#  - id: API-004
+#    text: "When a signed-in user uploads a JPEG of at most 10 MB, the API SHALL store it and return 201 with the photo id."
+#    kind: requirement
+#    ears: event
+#    owner: photos-api
+#    priority: P1
+#    milestone: M1
+#    status: implemented
+#    oracle_kind: [integration]
+#    oracles:
+#      - tests/integration/photos.test.ts::@req:API-004 stores upload and returns 201
+
+version: 1
+mission: "outfit-planner"
+requirements:
+  - id: API-001
+    text: "If an upload exceeds 10 MB, then the photos API SHALL reject it with HTTP 413 and SHALL NOT write any object to storage."
+    kind: requirement
+    ears: unwanted
+    owner: photos-api
+    priority: P1
+    milestone: M1
+    status: planned
+    oracle_kind: [integration]
+    oracles: []
+    fixtures: [upload_11mb_jpeg]
+    notes: "Boundary requirement for user input at the upload endpoint."
+
+  - id: API-002
+    text: "When a user deletes an outfit photo, the photos API SHALL remove the stored object within 24 hours."
+    kind: requirement
+    ears: event
+    owner: photos-api
+    priority: P2
+    milestone: M1
+    status: withdrawn
+    oracle_kind: []
+    notes: "Withdrawn by D-007; replaced by API-003 (immediate deletion). Tests MUST NOT cite this id."
+
+  - id: API-003
+    text: "When a user deletes an outfit photo, the photos API SHALL delete the stored object and its metadata before responding 204."
+    kind: requirement
+    ears: event
+    owner: photos-api
+    priority: P1
+    milestone: M1
+    status: planned
+    oracle_kind: [integration, contract]
+    supersedes: API-002
+    notes: "Privacy requirement for personal images (charter constraint)."

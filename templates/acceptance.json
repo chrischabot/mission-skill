@@ -1,0 +1,79 @@
+{
+  "_readme": [
+    "Template: skills/mission/templates/acceptance.json -> .mission/acceptance.json. What 'done' means (conventions section 2).",
+    "Every check starts with passes:false and verdict:null. Only a verifier verdict changes passes/verdict/verified_by/evidence/verified_at/commit; the orchestrator transcribes the verifier report and cites it.",
+    "Makers never edit this file (it is listed in .mission/frozen-paths.txt). Adding checks is allowed at any time; removing or editing a check needs a D-entry and a different agent than the one failing it (stop rule S7).",
+    "type: executable (field command; run by .mission/check.sh <milestone>, exit 0 = the criterion holds) | rubric (field rubric; graded by a verifier with evidence) | live (PENDING-LIVE until the live run) | human (decision or sign-off from the human queue).",
+    "verdict: null | PASS | FAIL | UNVERIFIED. UNVERIFIED is never PASS; a required UNVERIFIED check keeps its gate PENDING.",
+    "requirements: >=1 requirement ID from requirements.yaml (conventions section 3). Replace the four example checks with the mission's checks; keep this _readme and the field names."
+  ],
+  "mission": "<mission name>",
+  "schema_version": 1,
+  "checks": [
+    {
+      "id": "AC-001",
+      "requirements": ["<API-001>"],
+      "milestone": "M0",
+      "description": "<observable criterion, e.g. POST /outfits with a valid body returns 201 and the outfit is readable by id>",
+      "type": "executable",
+      "command": "<command run from the repository root that exits 0 only when the criterion holds, e.g. pnpm vitest run tests/acceptance/outfits-create.test.ts>",
+      "timeout_sec": 600,
+      "required": true,
+      "evidence_level": "local-run",
+      "passes": false,
+      "verdict": null,
+      "verified_by": null,
+      "evidence": null,
+      "verified_at": null,
+      "commit": null
+    },
+    {
+      "id": "AC-002",
+      "requirements": ["<UI-004>"],
+      "milestone": "M1",
+      "description": "<observable criterion, e.g. empty wardrobe screen shows one primary 'Add item' action and no placeholder text at 390x844, light and dark>",
+      "type": "rubric",
+      "rubric": "<.mission/loops/<loop-id>.md#<criterion id> or templates/grader-rubric.md filled path>",
+      "required": true,
+      "evidence_level": "local-run",
+      "passes": false,
+      "verdict": null,
+      "verified_by": null,
+      "evidence": null,
+      "verified_at": null,
+      "commit": null
+    },
+    {
+      "id": "AC-003",
+      "requirements": ["<OPS-002>"],
+      "milestone": "M2",
+      "description": "<observable criterion that needs the live environment, e.g. production canary purchase in sandbox mode completes and the webhook is recorded once>",
+      "type": "live",
+      "mechanism": "<script or runbook path that performs the live check>",
+      "required": true,
+      "evidence_level": "production",
+      "passes": false,
+      "verdict": null,
+      "verified_by": null,
+      "evidence": null,
+      "verified_at": null,
+      "commit": null
+    },
+    {
+      "id": "AC-004",
+      "requirements": ["<LAUNCH-001>"],
+      "milestone": "M2",
+      "description": "<human decision or sign-off, e.g. owner approves the App Store listing copy>",
+      "type": "human",
+      "human_queue_item": "<STATUS.md Human queue line>",
+      "required": true,
+      "evidence_level": "doc-source",
+      "passes": false,
+      "verdict": null,
+      "verified_by": null,
+      "evidence": null,
+      "verified_at": null,
+      "commit": null
+    }
+  ]
+}
