@@ -1,0 +1,22 @@
+{
+  "key": "<claim key>",
+  "claim": "<claim words>",
+  "environment": "<local | simulator | preview | staging | live | device>",
+  "target": "<deployed URL, device with the backend URL it talked to, or the local address>",
+  "commit": "<short sha>",
+  "produced_by": "<verifier | ui-reviewer>",
+  "started": "<ISO UTC>",
+  "latest_round": "<r1>",
+  "commands": [
+    {"cmd": "<exact command>", "exit": 0, "output": "<r1/output file>"}
+  ],
+  "artifacts": [
+    {"path": "<r1/live.md>", "sha256": "<sha256 of the file>", "kind": "<response | log | screenshot>"}
+  ],
+  "shim_differences": [
+    "<each way the local harness is kinder than production, or an empty list with shim_differences_note filled>"
+  ],
+  "shim_differences_note": "",
+  "verdict": "<pass | fail>",
+  "notes": ""
+}

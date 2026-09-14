@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: xs-restraint
+context:
+  scaffold_script: scaffold.sh

@@ -1,0 +1,84 @@
+# <Product name> · screen inventory
+#
+# Written by drive:designer at the design phase; extended by drive:architect when the spec adds
+# screens. The capture matrix, the objective checks, and the walkthrough are generated from this
+# file, so every value must be checkable. Rules: references/ui-verification.md sections 2 to 8.
+#
+# Schema
+#   version            integer, 1
+#   platforms          list of web | ios
+#   build_stamp        where the reviewer reads the build hash; must equal `git rev-parse --short HEAD`.
+#                      On an existing product, record the identifier it already exposes (a version
+#                      endpoint, a deploy id header, a hashed asset name); add a stamp only when none
+#                      exists, with a DECISIONS.md entry naming it verification infrastructure
+#   state_harness      how a debug build opens a screen in a state; the harness never ships to production
+#   surfaces           capture surfaces per tier; iOS roles resolve through .drive/local/ios/devices.json
+#   checks             regression diff thresholds (defaults shown)
+#   screens            one entry per screen:
+#     id               slug of the screen's name in words; used in cell and finding names
+#     tier             primary (full matrix, vision, walkthrough) | secondary (reduced matrix)
+#     job              the single thing a person comes to this screen to do
+#     tap_budget       actions from entry to job done, for a first-time user (primary only)
+#     entry            how a person reaches it, in words
+#     route            web path, without harness parameters (web only)
+#     launch           extra iOS launch arguments beyond the harness (ios only)
+#     states           declared states; default is always present
+#     must_show        required elements: role, accessible label, primary flag, minimum target
+#     must_not         patterns the reviewer treats as findings on sight
+#     walkthrough      start and done_when for the primary job (primary only)
+#     neighbours       screens recaptured in round two for regression
+#     baseline         design/baselines/<id>/, written by an accepted round
+
+version: 1
+platforms: [web, ios]            # keep only the platforms this product has
+
+build_stamp:
+  web: { meta: "build-hash", endpoint: "/__build", field: "gitHash" }
+  ios: { plist_key: "DriveBuildHash", build_setting: "DRIVE_BUILD_HASH" }
+
+state_harness:
+  states: [default, empty, loading, error, offline, long-text]   # plus declared extras: permission-denied, partial
+  web: { state: "?__state=<name>", network: "&__net=<online|offline|slow|fail>" }
+  ios: ["-DriveState", "<name>", "-DriveNetwork", "<online|offline|slow|fail>", "-DriveScreen", "<id>"]
+
+surfaces:
+  web:
+    primary: [w360, w768, w1280]          # add w1600 for dashboards and sites
+    secondary: [w360]
+    schemes: [light, dark]                # dark only when the product supports it; otherwise record why
+    text: [default, largest]              # largest = 200 percent
+  ios:
+    primary: [phone, small, large]        # or tablet for iPad; phone captures every state, small and large only default and the fullest state (references/domains/ios.md section 10)
+    secondary: [phone]
+    schemes: [light, dark]
+    text: [default, largest]              # large and accessibility-extra-extra-extra-large
+  rtl: false                              # true only when the spec localises to a right-to-left language
+
+checks:
+  diff_channel_delta: 16                  # a pixel counts as changed above this channel difference
+  diff_ratio: 0.005                       # changed-pixel ratio above which a diff must be annotated
+
+screens:
+  - id: create-entry
+    tier: primary
+    job: "create and save a new entry"
+    tap_budget: 4
+    entry: "Home, then New entry"
+    route: "/entries/new"
+    launch: []
+    states: [default, empty, loading, error, offline, long-text]
+    must_show:
+      - { role: heading, label: "New entry" }
+      - { role: textbox, label: "Title" }
+      - { role: textbox, label: "Notes" }
+      - { role: button, label: "Save entry", primary: true, min_target: { ios_pt: 44, web_px: 44 } }
+      - { role: button, label: "Cancel", min_target: { ios_pt: 44, web_px: 24 } }
+    must_not:
+      - "placeholder or lorem ipsum copy"
+      - "a control labelled Submit"
+      - "a colour or font size that does not resolve to a token"
+    walkthrough:
+      start: "cold launch, default state, fixture data"
+      done_when: "the saved entry appears in the entry list with its title"
+    neighbours: [entry-list]
+    baseline: design/baselines/create-entry/

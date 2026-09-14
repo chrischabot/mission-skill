@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "drive/ui-findings.schema.json",
+  "title": "drive UI review findings",
+  "description": "One findings.json per UI review round, written by drive:ui-reviewer to .drive/proofs/<key>/r<n>/findings.json and listed in that round's verdict.json evidence. Rules: references/ui-verification.md sections 6 to 11. The schema checks shape; the orchestrator also checks counts against references/ui-verification.md section 7 (the observation counts, fewer in a fix round; one worst observation per read cell; three clean checks per cell without findings) and that build_stamp equals head.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unit", "round", "head", "build_stamp", "clean_tree", "surfaces", "manifest", "matrix", "objective", "observations", "clean_checks", "walkthroughs", "scores", "findings", "decision"],
+  "properties": {
+    "unit": { "$ref": "#/$defs/slug", "description": "STATUS key or package id under review." },
+    "round": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "head": { "$ref": "#/$defs/sha" },
+    "build_stamp": { "$ref": "#/$defs/sha", "description": "Stamp read from the running build: web meta or /__build, or on an existing product the identifier it already exposes as recorded in design/screens.yaml; iOS DriveBuildHash." },
+    "clean_tree": { "type": "boolean", "description": "git status --porcelain was empty when the stamp was read." },
+    "surfaces": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["playwright-mcp", "chrome-devtools-mcp", "ios-simulator-mcp", "xcuitest+simctl", "agent-browser", "npx-playwright", "python-playwright", "browser-pane"] }
+    },
+    "tool_errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tool", "error", "fallback"],
+        "properties": {
+          "tool": { "type": "string" },
+          "error": { "type": "string", "description": "Exact error text from the preflight call." },
+          "fallback": { "type": "string" }
+        }
+      }
+    },
+    "manifest": { "$ref": "#/$defs/path" },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "captured", "missing"],
+      "properties": {
+        "expected": { "type": "integer", "minimum": 0 },
+        "captured": { "type": "integer", "minimum": 0 },
+        "missing": { "type": "array", "items": { "$ref": "#/$defs/cellRef" }, "description": "Every expected cell not captured; each also appears in the verdict's not_checked." }
+      }
+    },
+    "objective": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "result", "file"],
+        "properties": {
+          "check": { "enum": ["build-stamp", "matrix", "required-elements", "target-size", "safe-area-overlap", "horizontal-overflow", "truncation", "contrast", "accessibility-engine", "focus", "reduced-motion", "console-network", "regression", "token-use", "lighthouse", "links"] },
+          "result": { "enum": ["pass", "fail", "waived", "not-run"] },
+          "file": { "$ref": "#/$defs/path" },
+          "measured_by": { "type": "string", "description": "Tool and version that produced the value; never an estimate." },
+          "waiver": { "type": "string", "description": "Date and entry in design/DESIGN.md's decision log." },
+          "reason_not_run": { "type": "string" }
+        },
+        "allOf": [
+          { "if": { "properties": { "result": { "const": "waived" } } }, "then": { "required": ["waiver"] } },
+          { "if": { "properties": { "result": { "const": "not-run" } } }, "then": { "required": ["reason_not_run"] } }
+        ]
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["screen", "cell", "element", "location", "expected", "observed", "worst"],
+        "properties": {
+          "screen": { "$ref": "#/$defs/slug" },
+          "cell": { "$ref": "#/$defs/cell" },
+          "element": { "type": "string", "minLength": 1, "description": "Accessible label or tree path." },
+          "location": { "type": "string", "minLength": 1, "description": "Crop path or region." },
+          "expected": { "type": "string", "minLength": 1, "description": "Cites a DESIGN.md section, a token, a platform guideline, or a WCAG criterion." },
+          "observed": { "type": "string", "minLength": 1 },
+          "worst": { "type": "boolean", "description": "True on exactly one observation per cell: the element with the greatest user impact." },
+          "impact": { "type": "string", "description": "Required on the worst observation: the user impact that makes it worst." },
+          "finding": { "$ref": "#/$defs/slug", "description": "Id of the finding this observation raised, if any." }
+        },
+        "if": { "properties": { "worst": { "const": true } } },
+        "then": { "required": ["impact"] }
+      }
+    },
+    "clean_checks": {
+      "type": "array",
+      "description": "For each read cell with no findings: three things that could have failed and did not.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["screen", "cell", "checked", "evidence"],
+        "properties": {
+          "screen": { "$ref": "#/$defs/slug" },
+          "cell": { "$ref": "#/$defs/cell" },
+          "checked": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "walkthroughs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["screen", "job", "tap_budget", "actions", "completed", "file"],
+        "properties": {
+          "screen": { "$ref": "#/$defs/slug" },
+          "job": { "type": "string" },
+          "tap_budget": { "type": "integer", "minimum": 1 },
+          "actions": { "type": "integer", "minimum": 0 },
+          "completed": { "type": "boolean" },
+          "breaks_tried": {
+            "type": "array",
+            "items": { "enum": ["invalid-input", "offline-mid-flow", "background-foreground", "rotate", "reload", "back"] }
+          },
+          "file": { "$ref": "#/$defs/path" }
+        }
+      }
+    },
+    "scores": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["screen", "dimension", "score", "weight", "floor"],
+        "properties": {
+          "screen": { "$ref": "#/$defs/slug" },
+          "dimension": { "enum": ["contract-fidelity", "taste", "layout-integrity", "states", "accessibility", "copy", "platform-conventions", "regression"] },
+          "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "weight": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "floor": { "type": "integer", "minimum": 0, "maximum": 5 }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "decision": { "enum": ["pass", "fail", "blocked"] },
+    "model": { "type": "string", "description": "The model the reviewer ran as." }
+  },
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "path": { "type": "string", "minLength": 1 },
+    "cell": {
+      "type": "string",
+      "description": "<surface>.<scheme>.<text>.<dir>.<state>, for example phone.dark.largest.ltr.empty or w1280.light.default.ltr.error.",
+      "pattern": "^[a-z0-9-]+\\.(light|dark)\\.(default|largest|increase-contrast)\\.(ltr|rtl)\\.[a-z0-9-]+$"
+    },
+    "cellRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screen", "cell"],
+      "properties": {
+        "screen": { "$ref": "#/$defs/slug" },
+        "cell": { "$ref": "#/$defs/cell" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "screen", "cell", "element", "category", "severity", "expected", "observed", "evidence", "objective_ref", "suggested_fix", "confidence", "round", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug", "description": "The screen and the problem in words, e.g. create-entry-save-button-clipped-at-largest-text. Stable across rounds." },
+        "screen": { "$ref": "#/$defs/slug" },
+        "cell": { "$ref": "#/$defs/cell" },
+        "element": { "type": "string", "minLength": 1, "description": "Accessible label and tree path." },
+        "category": { "enum": ["layout", "contract", "state", "platform", "accessibility", "taste", "copy", "regression", "ux"] },
+        "heuristic": { "enum": ["system-status", "real-world-match", "user-control", "consistency", "error-prevention", "recognition-over-recall", "flexibility-efficiency", "minimalist-design", "error-recovery", "help-docs"] },
+        "severity": { "enum": ["blocking", "major", "minor", "note"] },
+        "expected": { "type": "string", "minLength": 1, "description": "What the contract or rule requires, with its citation." },
+        "observed": { "type": "string", "minLength": 1, "description": "What is there, with measured values and their source." },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/path" } },
+        "objective_ref": { "type": ["string", "null"], "description": "objective/<check>.json#<pointer> when an objective check raised it." },
+        "suggested_fix": { "type": "string", "minLength": 1 },
+        "confidence": { "enum": [25, 50, 75, 100] },
+        "round": { "type": "integer", "minimum": 1, "maximum": 3, "description": "Round in which the finding was raised." },
+        "status": { "enum": ["open", "closed", "disputed", "upheld", "overruled", "deferred"] },
+        "maker_answer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "round"],
+          "properties": {
+            "kind": { "enum": ["fixed", "disputed"] },
+            "round": { "type": "integer", "minimum": 1 },
+            "commit": { "$ref": "#/$defs/sha" },
+            "reason": { "type": "string", "minLength": 1, "description": "For a dispute: the contract section or platform rule it relies on." }
+          },
+          "allOf": [
+            { "if": { "properties": { "kind": { "const": "fixed" } } }, "then": { "required": ["commit"] } },
+            { "if": { "properties": { "kind": { "const": "disputed" } } }, "then": { "required": ["reason"] } }
+          ]
+        },
+        "closure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["round", "evidence"],
+          "properties": {
+            "round": { "type": "integer", "minimum": 1 },
+            "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/path" }, "description": "The new crop or cell that proves the fix." }
+          }
+        },
+        "ruling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["decision", "record", "decisions_entry"],
+          "properties": {
+            "decision": { "enum": ["defect", "not_a_defect", "rubric_ambiguous"], "description": "drive:auditor's ruling on the dispute. defect upholds the finding; not_a_defect overrules it; rubric_ambiguous applies the stricter reading, so the finding is upheld and the rubric is amended." },
+            "record": { "$ref": "#/$defs/path", "description": "The dispute record, .drive/reviews/<date>-dispute-<key>.md." },
+            "decisions_entry": { "type": "string", "minLength": 1, "description": "Date and slug of the DECISIONS.md entry the orchestrator wrote from the auditor's ruling." }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "category": { "const": "ux" } } }, "then": { "required": ["heuristic"] } },
+        { "if": { "properties": { "severity": { "const": "blocking" } } }, "then": { "properties": { "confidence": { "enum": [50, 75, 100] } } } },
+        { "if": { "properties": { "status": { "const": "closed" } } }, "then": { "required": ["closure"] } },
+        { "if": { "properties": { "status": { "const": "deferred" } } }, "then": { "properties": { "severity": { "enum": ["minor", "note"] } } } },
+        { "if": { "properties": { "status": { "const": "upheld" } } }, "then": { "required": ["ruling"], "properties": { "ruling": { "properties": { "decision": { "enum": ["defect", "rubric_ambiguous"] } } } } } },
+        { "if": { "properties": { "status": { "const": "overruled" } } }, "then": { "required": ["ruling"], "properties": { "ruling": { "properties": { "decision": { "const": "not_a_defect" } } } } } },
+        { "if": { "properties": { "status": { "const": "disputed" } } }, "then": { "required": ["maker_answer"] } }
+      ]
+    }
+  }
+}

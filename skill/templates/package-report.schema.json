@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "drive/package-report.schema.json",
+  "title": "drive work package report",
+  "description": "Written by the maker to .drive/packages/<id>/report.json. Report only work a tool result from this session shows. An empty gates_run counts as partial, and so does a missing report. drive.py lint checks that every listed file is under the brief's Files you own.",
+  "type": "object",
+  "required": ["package", "status", "files", "tests", "gates_run", "wiring_needed", "deps_requested", "honest_gaps", "follow_ups", "noticed_not_touched", "concerns", "summary", "model"],
+  "additionalProperties": false,
+  "properties": {
+    "package": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+    "status": {"enum": ["complete", "partial", "blocked"]},
+    "files": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Every path created or changed, relative to the repository root."},
+    "tests": {"type": "array", "items": {"type": "string", "pattern": "::"}, "description": "path::name for each test written or run for the claim."},
+    "gates_run": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cmd", "exit", "tail"],
+        "properties": {
+          "cmd": {"type": "string", "minLength": 1},
+          "exit": {"type": "integer"},
+          "tail": {"type": "string", "maxLength": 1000}
+        }
+      }
+    },
+    "wiring_needed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "patch"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1},
+          "patch": {"type": "string", "minLength": 1, "description": "Exact lines or a unified diff against the current file."}
+        }
+      }
+    },
+    "deps_requested": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version", "reason"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "version": {"type": "string"},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "honest_gaps": {"type": "array", "items": {"type": "string"}},
+    "follow_ups": {"type": "array", "items": {"type": "string"}},
+    "noticed_not_touched": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "problem", "reason"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1},
+          "problem": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1, "description": "One line: why it was left alone."}
+        }
+      }
+    },
+    "concerns": {"type": "array", "items": {"type": "string"}},
+    "summary": {"type": "string", "maxLength": 1500},
+    "model": {"type": "string", "minLength": 1}
+  }
+}

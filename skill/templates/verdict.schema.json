@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "drive/verdict.schema.json",
+  "title": "drive verification verdict",
+  "description": "Returned by drive:verifier (and the UI reviewer and final audit) for one unit: a STATUS key or a package id. A pass needs ran to include the project's full-suite command at exit 0 (unless the probe records none, or every shape in scope has no suite), every claim holds at confidence 75 or above with at least one refutation attempt, no blocking gap, every harness_kindness entry resolved or at note, and a rung_supported the evidence reaches. drive.py lint applies these rules to every verdict: token, and counts a verdict only when the SubagentStop hook recorded its sha256 in the provenance ledger for a drive:verifier or drive:ui-reviewer (a final audit: drive:auditor or drive:verifier), backed by that agent's own transcript: the transcript still exists, hashes as recorded, and holds the Write, Edit, or shell command that wrote this exact path. No read-only review may have been voided while the file was written.",
+  "type": "object",
+  "required": ["verdict", "unit", "round", "scope", "ran", "claims", "gaps", "harness_kindness", "not_checked", "rung_supported", "for_maker"],
+  "additionalProperties": false,
+  "properties": {
+    "verdict": {"enum": ["pass", "fail", "blocked"], "description": "blocked means the verifier could not execute; it does not spend a round."},
+    "unit": {"type": "string", "minLength": 1, "description": "The STATUS key or package id verified."},
+    "round": {"type": "integer", "minimum": 1},
+    "scope": {
+      "type": "object",
+      "required": ["range", "path"],
+      "properties": {
+        "range": {"type": "string", "minLength": 1, "description": "<base>..<head>, or working tree"},
+        "path": {"type": "string", "minLength": 1, "description": "Absolute checkout path."},
+        "files": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "surface": {"type": "string", "description": "Where verification ran, for example xcuitest+simctl, playwright, curl against the deployed URL."},
+    "ran": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cmd", "exit"],
+        "properties": {
+          "cmd": {"type": "string", "minLength": 1},
+          "exit": {"type": "integer"},
+          "seconds": {"type": "number"},
+          "output": {"type": "string", "description": "Path of the captured output under the round's proof directory."}
+        }
+      }
+    },
+    "claims": {"type": "array", "items": {"$ref": "#/$defs/claim"}},
+    "gaps": {"type": "array", "items": {"$ref": "#/$defs/gap"}},
+    "harness_kindness": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["shim", "kinder_than_production_how", "severity"],
+        "properties": {
+          "shim": {"type": "string", "minLength": 1},
+          "kinder_than_production_how": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["blocking", "should_fix", "note"]},
+          "resolved": {"type": "boolean"}
+        }
+      }
+    },
+    "not_checked": {"type": "array", "items": {"type": "string"}, "description": "What was not verified and why; a rubric criterion that does not fit is written rubric_gap: <criterion>: <why>."},
+    "rung_supported": {"enum": ["Missing", "Scaffold", "Partial", "Local Proof", "Live Proof", "Operational"]},
+    "for_maker": {"type": "string", "description": "Gaps only, stated so the maker can act; no praise and no restatement of what works."}
+  },
+  "$defs": {
+    "claim": {
+      "type": "object",
+      "required": ["id", "status", "oracle", "refutations_attempted", "evidence", "confidence"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "description": "The STATUS key of the claim."},
+        "status": {"enum": ["holds", "refuted", "unverifiable"]},
+        "oracle": {"type": "string", "minLength": 1, "description": "The independent reference that decided it."},
+        "refutations_attempted": {"type": "array", "items": {"type": "string"}, "description": "What was tried that should have broken the claim, and what happened."},
+        "evidence": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"enum": [0, 25, 50, 75, 100], "description": "100 demonstrated in the real runtime; 75 reproduced under realistic conditions against an independent oracle; 50 contrived; 25 speculative; 0 inapplicable."},
+        "rung_supported": {"enum": ["Missing", "Scaffold", "Partial", "Local Proof", "Live Proof", "Operational", "Done"]}
+      }
+    },
+    "gap": {
+      "type": "object",
+      "required": ["id", "claim", "severity", "what", "where", "repro", "confidence"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "description": "A short slug of the problem in words."},
+        "claim": {"type": "string", "description": "The claim key the gap is against."},
+        "severity": {"enum": ["blocking", "should_fix", "note"]},
+        "what": {"type": "string", "minLength": 1, "description": "One observable sentence."},
+        "where": {"type": "string", "description": "file:line, URL, or screen."},
+        "repro": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"enum": [0, 25, 50, 75, 100]}
+      }
+    }
+  }
+}

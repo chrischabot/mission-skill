@@ -1,0 +1,8 @@
+{
+  "name": "drive",
+  "version": "0.1.0",
+  "description": "Turn one high-level goal into finished, verified work and drive it to completion autonomously.",
+  "author": { "name": "Chris Chabot", "url": "https://github.com/chrischabot" },
+  "license": "MIT",
+  "keywords": ["orchestration", "autonomous", "verification"]
+}
