@@ -85,7 +85,7 @@ them (`research/39-run-lessons-verification.md`).
   build cannot afford three full rounds per artifact and per-package verification within the
   envelope drive itself quoted.
 - **Cost model.** `references/models.md` section 7 put a size M build at $130 to $270; this run cost
-  about $352 and stopped with most rows at Partial. The run's own spend lines were also unreliable
+  $359 and stopped with most rows at Partial. The run's own spend lines were also unreliable
   (the research ledger claimed about $0.35 for a lane of about 85 tool calls).
 - **Reviews left no file.** The intake classification review and all six spec and design review
   rounds returned findings only in the architect's message and a line in STATE.md or DECISIONS.md, so
