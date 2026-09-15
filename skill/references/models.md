@@ -175,7 +175,8 @@ call, or a Workflow script.
 
 Estimate at intake from the shape and size and write the figure on GOAL.md's `budget:` line. These
 are estimates from a cost model recomputed on 2026-09-14 at September 2026 prices, assuming the
-roster above, a one-hour orchestrator cache, and the round limits in SKILL.md. They are not quotes; a
+roster above, a one-hour orchestrator cache, and the round bounds and verification unit in
+`references/verification.md` sections 2 and 6. They are not quotes; a
 run with more packages, rounds, or UI screens than the typical case lands above them.
 
 The model prices every agent invocation as requests that re-read a growing cached context. An agent
@@ -187,25 +188,38 @@ a re-write after every wait longer than the hour. Typical invocations come out a
 full Opus verifier round, $1.60 for a scoped round or refutation, $1.70 for a Sonnet implementer,
 $8.60 for an xhigh investigation, and $10.80 for a Fable final audit, which matches the cost of
 subagents Claude Code has recorded, and the orchestrator is the largest single cost in most runs. The
-`fix` XS to M, `feature` S and M, `report` M, `build` L and XL, `move` L, and `publish` L cells were
-modelled role by role; the others scale the earlier figures by the ratio those cells showed. The
-first real runs should replace them: a headless run records `total_cost_usd`, and a background run's
-cost is in `/usage`.
+`fix` XS to M, `feature` S, `report` M, `move` L, and `publish` L cells were modelled role by role;
+the `build` row and the `feature` M cell come from the measured run below; the others scale the
+earlier figures by the ratio those cells showed. Further real runs should replace them: a headless
+run records `total_cost_usd`, and a background run's cost is in `/usage`.
 
 The first measured run (`research/40-linkkeeper-run-review.md`, 2026-09-15) was a `build` at M with 44
-claims and 15 packages: it recorded $359 and about seven hours, stopped at its dollar line with 6
-claims at Local Proof and 38 at Partial, and spent roughly three hours on intake, research, spec,
-design and test plan before the first code, each planning artifact using three review rounds. The
-`build` row is rescaled from that run and is still one data point; a complete M build with a UI
-review and per-package verification lands at the top of its range or above. Any figure a run writes
-as spend comes from a recorded `total_cost_usd`, `/usage`, or the harness budget line; when none is
-available the line says "not measured" rather than giving an estimate as a cost.
+claims and 15 packages: it recorded $359 over about seven hours and stopped at its dollar line with 6
+claims at Local Proof and 38 at Partial. It ran under the earlier bounds, with three full review
+rounds on every planning artifact and per-package verification that failed most units once or twice,
+so the M cells are recomputed from its measured phases for the bounds now in force. At the run's
+average of about $50 an hour, its three hours of planning cost about $150 and its four hours of build
+and verify about $200; replacing six full planning review rounds with two full rounds and two scoped
+re-checks removes about a third of the planning cost ($50), and wave-level verification removes about
+a third of the build and verify cost ($60), which leaves about $240 for the work that run did, while
+the rounds it could not afford, to bring 38 Partial rows to Local Proof, add up to about $200, so a
+44-claim M build lands between $240 and $450. A `feature` at M has no research lanes, capability map,
+wave 0, or integrate phase, which took about an hour and a half of that run, and usually carries half
+the claims, so its cell is set at about 60 to 80 percent of the build cell. The `build` L and XL cells
+were rescaled from the same run and are unchanged, because per-package verification and three full
+review rounds still apply there. All of these rest on one run, and a UI review or many packages
+verified alone for auth, money, or data-loss claims put a run at the top of its range or above.
+
+Any figure a run writes as spend comes from a recorded total, named with its source: a headless
+result's `total_cost_usd`, `/usage`, or the harness budget line. When none is available the line says
+"not measured" rather than giving an estimate as a cost, and the report's figure is taken after the
+final audit has returned, because a figure taken before it leaves out the most expensive verdicts.
 
 | Shape | XS | S | M | L | XL |
 |---|---|---|---|---|---|
 | `fix` | $3 to $6 | $20 to $40 | $50 to $120 | $90 to $200 | reclassify |
-| `feature` | $3 to $6 | $30 to $50 | $130 to $270 | $300 to $550 | $600 to $1,100 |
-| `build` | not used | $30 to $80 | $350 to $700, measured | $600 to $1,300 | $1,200 to $3,000, more on a bad run |
+| `feature` | $3 to $6 | $30 to $50 | $150 to $350, from one measured run | $300 to $550 | $600 to $1,100 |
+| `build` | not used | $30 to $80 | $240 to $450, from one measured run | $600 to $1,300 | $1,200 to $3,000, more on a bad run |
 | `move` | $5 to $10 | $30 to $80 | $110 to $270 | $190 to $490 | $500 to $1,000 |
 | `publish` | $3 to $6 | $20 to $60 | $80 to $240 | $180 to $420 | $350 to $700 |
 | `report` | $3 to $6 | $10 to $40 | $25 to $60 | $75 to $180 | $180 to $380 |
@@ -215,7 +229,7 @@ Add $3 to $10 for the security review and severe tests that the `auth` trait bri
 the top of the range is the cumulative envelope the leg loop in `long-running.md` section 2 enforces
 across legs, and each leg's `--max-budget-usd` is what remains of it. Background sessions have no
 dollar cap, so the subagent count stands in for one. Write it on the budget line
-(`budget: 40 turns · 40 subagents · 3 h · $130 to $270`, the number directly before `subagents`):
+(`budget: 40 turns · 40 subagents · 3 h · $150 to $350`, the number directly before `subagents`):
 `drive.py lint --gate` counts the maker subagents (`drive:implementer`, `drive:writer`,
 `drive:designer`, `drive:architect`, `drive:researcher`) the hooks recorded starting since `init`,
 warns past the count, and fails past twice the count until a DECISIONS.md entry records the budget
@@ -225,8 +239,10 @@ dollar envelope bounds the rest. At the warning, log the overrun in DECISIONS.md
 order SKILL.md section 9 gives; at the failure, record the overrun with its `Narrows:` line and
 re-plan within the remaining envelope, or stop. Record each phase's estimate in the plan; when a
 phase spends twice its estimate, stop, record why in STATE.md, and continue only after a re-plan
-in GOAL.md shows the remaining envelope covers the rest. The report states the envelope and, for
-headless runs, the actual `total_cost_usd` from the result.
+in GOAL.md shows the remaining envelope covers the rest. The report states the envelope and the
+recorded spend taken after the final audit. A headless leg's own `total_cost_usd` arrives only when
+that session ends, so the report gives earlier legs' totals from `.drive/local/run.md` plus the latest
+recorded figure for the current leg with its time, and says the leg's result holds its final figure.
 
 ## 8. Cache discipline
 
@@ -257,7 +273,7 @@ headless runs, the actual `total_cost_usd` from the result.
 | Sink | Why it grows | Bound |
 |---|---|---|
 | Orchestrator context | Fable cache reads, writes, and output across a long run; reads are the largest part. | One-hour cache. Fixed-size results of at most 1,500 characters plus paths. No source, logs, or screenshots read inline. A fresh session per day-sized phase. Model held constant. |
-| Verifier rounds | They scale with packages times rounds, on Opus. | Tier 0 first, so a package with failing tests never reaches a verifier. Round limits per shape. Batch trivially small packages into one verification. The handoff never carries the maker's transcript. |
+| Verifier rounds | They scale with packages times rounds, on Opus. | Tier 0 first, so a package with failing tests never reaches a verifier. Round limits per shape. One handoff per wave at M rather than per package (`verification.md` section 2). The handoff never carries the maker's transcript. |
 | UI review | Each screen batch is a fresh Opus context that captures, reads trees and images, and judges, and each round repeats it. | Objective checks before vision, at most fifteen images a session, round two limited to affected screens and their neighbours (`ui-verification.md`). |
 
 Implementer output and retries are a smaller line, about a twentieth of a `build` L run, and stay

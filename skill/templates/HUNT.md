@@ -84,6 +84,7 @@ One environment only (delete otherwise):
 
 Performance baseline (fix/perf; delete otherwise):
 Metric and budget: <metric, path, target with unit>
+Sensitivity shown: known-bad <case> gave <value> · known-good <case> gave <value> · the difference clears run-to-run spread of <value> · `<command>`
 Command:      `<benchmark or profile command>` · conditions: <machine, data size, warm-up, repetitions>
 Baseline:     median <value> · spread <min to max or standard deviation> over <n> runs · commit <sha>
 

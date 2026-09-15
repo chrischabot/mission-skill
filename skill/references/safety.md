@@ -162,6 +162,10 @@ Never ask again about the same unit in the same run.
   the backup exists. Check that the evidence supports that specific action, since a signal that
   looks like a known failure may have another cause. A step that cannot be undone is irreversible
   and waits for the owner.
+- **Stop only what the run started.** Record the process id of every server, simulator, emulator,
+  watcher, or tunnel the run launches, and at cleanup stop only those ids. Never kill by process name,
+  port, or pattern (`pkill`, `killall`, a `kill` fed by `lsof`), which also reaches the owner's own
+  processes, and leave `.drive/proofs/` in place.
 - **Only systems the owner owns.** Adversarial tests, fuzzing, load tests, and scans run against
   local or disposable environments, or against infrastructure GOAL.md records as the owner's.
   Never against third-party services, shared environments that belong to others, or addresses

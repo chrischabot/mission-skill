@@ -7,8 +7,8 @@ max_turns: 200
 timeout_seconds: 3600
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
-  Evaluation harness note, not from the user: end the run once the import claim has an independent
-  verdict recorded. Do not start later phases.
+  End the run once the import claim has an independent verdict recorded. Do not start later
+  phases.
 ---
 
 /drive --resume

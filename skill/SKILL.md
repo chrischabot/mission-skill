@@ -121,20 +121,22 @@ named in the commit body's `Evidence:` line.
 | Size | Trigger (any one) | Ceremony |
 |---|---|---|
 | XS | one function or file, cause known, minutes | the fast path |
-| S | one module, at most one unknown, under two hours | GOAL, STATE, STATUS with one to three rows; a short spec; one verifier; a severe test per claim |
-| M | several modules, two or three unknowns, about a day | full state files; spec; verifier per package; scaled severe review; architect reviews the classification |
-| L | two surfaces or repositories, a design unknown, one to three days | adds research, design, test strategy, required live proof, lessons; the auditor's final audit |
+| S | one module, at most one unknown, under two hours | GOAL, STATE, STATUS with one to three rows; a short spec, reviewed with design and test plan in one round plus at most one scoped re-check; one verifier; a severe test per claim |
+| M | several modules, two or three unknowns, about a day | full state files; spec; a spec review, then one combined design and test-plan review, each one round plus at most one scoped re-check; a verifier per wave, per package for auth, money, or data-loss units; a severe test per claim; architect reviews the classification |
+| L | two surfaces or repositories, a design unknown, one to three days | adds research, design, test strategy, up to three full review rounds per planning artifact, a verifier per package, required live proof, lessons; the auditor's final audit |
 | XL | three or more surfaces, an open problem, multi-day | adds phase gates with an auditor re-classification review, workflow fan-out, per-phase bounds |
 
 6. **Plan.** Read `references/lessons/general.md` and the "Learned constraints" of each selected
-   domain. Run `drive.py init --size <size> --goal -` with the goal on stdin through a quoted heredoc
+   domain. Run `drive.py init --size <size> --slug <deliverable> --goal -`, the slug naming the
+   deliverable (`linkkeeper`) and never the goal sentence, with the goal on stdin through a quoted heredoc
    (`<<'GOAL'`); it archives another goal's unfinished run and records the owner's worktrees,
    branches, and dirty paths as the hygiene baseline. Record the serving model and effort in
    STATE.md (designed for `claude-fable-5-1` at `high`; name any other in one line). Run `drive.py preflight` and
    act on it (`references/long-running.md` section 3; after a failure a relaunch first sets `status: blocked` with a
    `launch preflight:` Blocked on line quoting its command), then `drive.py capabilities` and the
    probes in `references/capabilities.md` section 1. Fill GOAL.md per `references/intake.md` sections 10 and
-   11. At M and above a fresh `drive:architect` reviews the classification. Commit GOAL.md first, as
+   11. At M and above a fresh `drive:architect` reviews the classification and writes its review file
+   (section 5). Commit GOAL.md first, as
    `drive(intake): <slug>`; it is now the plan. Lowering a target later needs a DECISIONS.md entry in
    the same commit whose `Narrows:` line names it.
 7. **The one question**, only when two readings lead to different deliverables and the gated step
@@ -154,7 +156,7 @@ For each phase in GOAL.md's plan:
    do the work checks every other phase and the final audit.
 4. Update STATUS rows with evidence, rewrite STATE.md (`phase`, `next`, `updated`, `commit`,
    `model`), run `drive.py lint --gate <phase>`, fix what it reports, and commit naming the phase and
-   claims.
+   claims, staging the files by path (`references/state-files.md` section 10).
 
 ## 5. Proof
 
@@ -179,7 +181,15 @@ edit, or HEAD was rewritten or moved by commits you did not make; re-run that re
 Only blocking gaps start a round. Bounds: fix 2; feature and report 3; publish 3 per phase gate;
 build 3 per milestone plus 2 final; move 3 per phase and 4 at cutover; operate 2 per observed step.
 At the bound, set the rung the last verdict supports and record the gaps. Disputes go once to
-`drive:auditor`; the ruling goes in DECISIONS.md.
+`drive:auditor`; the ruling goes in DECISIONS.md. At M a verifier handoff covers one wave; per-package
+rounds are the default at L and XL and for units carrying auth, money, or data-loss claims.
+
+Planning reviews are bounded by size: at S and M one full round plus at most one scoped re-check that
+reads only the previous round's blocking findings, with design and test plan reviewed together (and at
+S the spec with them); at L and XL up to three full rounds. A blocking finding still blocks. The
+classification review and every spec, design, and test-plan review round write
+`.drive/reviews/<date>-<phase>-review-r<n>.md` from `templates/review.md`, opening with `verdict:` and
+`round: <n>/<bound>`. `references/verification.md` sections 2 and 6 hold the bounds and the unit.
 
 After every gate run and verification round, print (gaps one per line, blocking first):
 
@@ -240,8 +250,9 @@ skeleton, test harness, schema, tokens, and ignore rules for the test runner's a
 outputs) runs alone. At most eight implementers per wave share the
 checkout; entry points, manifests, lockfiles, generated code, and state files are yours. After a
 wave, integrate alone: wiring, dependencies once, full gates plus one real-system check,
-`drive.py guard`, a commit per package staging only its paths, an ownership
-audit, then the wave verifier. Never `git reset --hard` or to another commit, `git update-ref HEAD`, `git stash` (beyond `list` and `show`), `git clean` (beyond a dry
+`drive.py guard`, a commit per package staging only its owned paths, frozen tests, and report by
+name (never `git add -A` or `git add .drive` while any agent runs), an ownership audit, then the wave
+verifier. Never `git reset --hard` or to another commit, `git update-ref HEAD`, `git stash` (beyond `list` and `show`), `git clean` (beyond a dry
 run), or `git commit --amend` here; the guard refuses them while a run is active. Workflows are for read-only fan-outs
 when the launch settings allow `Workflow`; if one is refused, use background Agent calls. Never put implementation in a workflow or give an editing agent
 `isolation: worktree`. Details in `references/parallel.md`.
@@ -349,7 +360,8 @@ a short list with the default already applied and the command that finishes each
 at first; what shipped with its rung and evidence; what is proven live versus only locally, with
 every way a harness was kinder than production; what is not done and the exact step that would
 finish it; decisions taken with their undo; open failures; lessons with their commits; commands to
-verify from a clean checkout; spend. A stopped run's report opens with "Stopped because". Plain
+verify from a clean checkout; spend, taken after the final audit from a recorded total or written as
+"not measured". A stopped run's report opens with "Stopped because". Plain
 language, things named by their words. Set `status: done` when every row is Done or Dropped,
 otherwise `status: stopped` with every row below Done explained; commit, run `drive.py lint --final`,
 which runs the full suite once, then `drive.py end`. A stopped run with any row above Missing needs

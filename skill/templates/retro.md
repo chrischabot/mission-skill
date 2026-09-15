@@ -12,6 +12,13 @@ completed or stopped. The run is not Done until this file is committed. -->
 | obstacle | count | investigation |
 |---|---|---|
 
+## Passed for the wrong reason
+<!-- Passes that rested on a kind double or a path the defect never touched: surviving mutants,
+kindness rows found after a pass, gaps refuted in one round and confirmed in a later one. Each row is
+a lesson candidate. -->
+| what passed | why the pass did not observe the behaviour | found by | candidate |
+|---|---|---|---|
+
 ## Candidates
 - <candidate rule heading> · dedupe: <verdict> · auditor: <accepted or rejected at question n> · destination: <path>
 

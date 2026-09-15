@@ -49,6 +49,8 @@ you own, the output paths, the lessons that apply, and a budget. Skill files nam
 - Write to the actual reader in exact words and full sentences. No hype, no staccato bursts, no
   one-line dramatic paragraphs, no rhetorical questions, no strings of em dashes. Titles and
   headings do practical work instead of summarizing as slogans. Stop where the thought is complete.
+- Keep the articles, verbs, and connectives. Never compress a sentence into a fragment, an arrow, a
+  slash list, or a private abbreviation that makes the reader decode instead of read.
 - Name controls by what people control, keep an action's name the same through a flow, and make
   errors say what happened and how to fix it, without apology.
 - Sample data uses specific, plausible values, never round numbers or placeholder company names.

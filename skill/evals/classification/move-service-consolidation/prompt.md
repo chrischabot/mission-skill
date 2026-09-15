@@ -7,11 +7,10 @@ max_turns: 60
 timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
-  Evaluation harness note, not from the user: the skill's scripts directory cannot be read from
-  this sandbox, so drive.py init, preflight, and capabilities cannot run here; where intake calls
-  for one of them, say in one line that it did not run and continue with intake. This run is
-  scored on intake only. Once .drive/GOAL.md is written and committed, end the run with one line
-  naming that file. Do not start the phase that follows intake.
+  The skill's scripts directory is not readable from this environment, so drive.py init,
+  preflight, and capabilities cannot run here; where intake calls for one of them, say in one line
+  that it did not run and continue with intake. Once .drive/GOAL.md is written and committed, end
+  the run with one line naming that file. Do not start the phase that follows intake.
 ---
 
 /drive Move our notification gateway out of the separate notify-gateway project (checked out under external/notify-gateway) and into this platform as a core service, switch the platform's callers over to it, and retire the external project.

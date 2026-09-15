@@ -576,9 +576,12 @@ Given another tenant's session. When an admin revokes it. Then it is revoked.
 Because: the admin app has its own login.
 """
 
+    REVIEW = "# REVIEW · spec · round 1\nverdict: ready\nround: 1/2\n\n## Blocking\n- none\n\n## Should fix\n- none\n\n## Notes\n- none\n"
+
     def test_spec_and_status_agree(self):
         repo = self.make_run()
         self.write(repo, ".drive/SPEC.md", self.SPEC)
+        self.write(repo, ".drive/reviews/{}-spec-review-r1.md".format(TODAY), self.REVIEW)
         self.assertNoFailure(self.lint(repo, gate="spec"))
 
     def test_heading_without_status_row_fails(self):
@@ -603,6 +606,7 @@ Because: the admin app has its own login.
         spec = self.SPEC.replace("### Session list shows active sessions",
                                  "### Session list shows only the active sessions\nFormerly: \"Session list shows active sessions\"")
         self.write(repo, ".drive/SPEC.md", spec)
+        self.write(repo, ".drive/reviews/{}-spec-review-r1.md".format(TODAY), self.REVIEW)
         self.assertNoFailure(self.lint(repo, gate="spec"))
 
 

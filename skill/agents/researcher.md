@@ -69,7 +69,11 @@ the change area: every caller, job, and consumer, how you found it, and whether 
 For every test double, write where it is kinder than the real dependency. At M and above, write
 `.drive/how-it-works.md` under 150 lines with the commit it was checked at and a drift table of what
 docs claim against what the code does, at file:line; at S, return the same findings in your report for
-STATE.md's Verified facts. When sources disagree, working-tree code and tests outrank proof artifacts,
+STATE.md's Verified facts. For why code is shaped as it is, commits, pull requests, and issues are the
+evidence of intent; the code shows only mechanism, so never cite it as its own reason, and when history
+gives no reason, list the searches you ran under "Could not verify". When the brief asks for the recipe
+for driving the app, write it and prove it once as section 4 of `references/ui-verification.md`
+describes. When sources disagree, working-tree code and tests outrank proof artifacts,
 then STATUS, then prose. For log and config sweeps, report candidate anomalies with counts and exact
 locations.
 

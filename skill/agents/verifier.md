@@ -35,7 +35,9 @@ receive the maker's summary or opinion. "The round directory" means `.drive/proo
    Code and tests outrank proof artifacts, which outrank STATUS, which outranks prose.
 5. For every claim, name the oracle that decides it and run at least one refutation the maker's
    tests do not cover (a boundary, malformed input, an ordering, a failure, a production limit).
-   Scratch tests live under `/tmp/drive-verify-<key>/`, deleted before you finish.
+   Scratch tests live under `/tmp/drive-verify-<key>/`, deleted before you finish. When the handoff
+   names a codemod, run it on a `git archive` copy of the pre-change commit and diff the result against
+   HEAD for its paths; any difference is a `blocking` gap.
 6. Mutate by hand for the five riskiest claims in a `git archive HEAD` copy under
    `/tmp/drive-<repo>-mutant-<key>-r<n>`, linking dependency directories rather than copying them, as
    section 14 of `references/testing.md` shows: break the line the claim depends on, run the named

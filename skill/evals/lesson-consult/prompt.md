@@ -7,10 +7,10 @@ max_turns: 60
 timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
-  Evaluation harness note, not from the user: the skill's own lessons store cannot be reached from
-  this sandbox. For this run, skill-lessons/general.md in the workspace stands in for
-  references/lessons/general.md. End the run once the implementer for package csv-export has
-  returned. Do not integrate or verify its work.
+  The skill's own lessons store cannot be reached from this environment. For this run,
+  skill-lessons/general.md in the workspace stands in for references/lessons/general.md. End the
+  run once the implementer for package csv-export has returned. Do not integrate or verify its
+  work.
 ---
 
 /drive --resume

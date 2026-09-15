@@ -7,11 +7,10 @@ max_turns: 60
 timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
-  Evaluation harness note, not from the user: the skill's scripts directory cannot be read from
-  this sandbox, so drive.py init, preflight, and capabilities cannot run here; where intake calls
-  for one of them, say in one line that it did not run and continue with intake. This run is
-  scored on intake only. Once .drive/GOAL.md is written and committed, end the run with one line
-  naming that file. Do not start the phase that follows intake.
+  The skill's scripts directory is not readable from this environment, so drive.py init,
+  preflight, and capabilities cannot run here; where intake calls for one of them, say in one line
+  that it did not run and continue with intake. Once .drive/GOAL.md is written and committed, end
+  the run with one line naming that file. Do not start the phase that follows intake.
 ---
 
 /drive Find this deep, annoying bug and fix it: the weekly totals report is occasionally one entry off, usually in weeks where someone logged time late on a Sunday night.

@@ -22,17 +22,23 @@ buckets, domains) are not already taken.
 |---|---|---|---|---|
 | intake | the goal | classify; restate block; conventions and name collisions checked (orchestrator) | GOAL.md | committed before other work (orchestrator) |
 | research | GOAL.md committed | unknowns inventory; one question per decision; lanes and probes on scratch resources (drive:researcher; reconciliation with `model: "opus"`; drive:grader re-opens cited sources) | RESEARCH.md | every blocking question answered or held as an assumption with a refuting test; conflicts filed with a next check (orchestrator; drive:grader for citations) |
-| spec | research exit | capability map when warranted, then claims per module as headings, each with what would prove it wrong; out of scope; assumptions with reversal cost (drive:architect) | SPEC.md | claims refutable, constraints cite RESEARCH.md slugs (drive:architect in fresh context at S to M; drive:auditor at L to XL) |
-| design | spec pass | architecture per surface; the contract between surfaces written before either side; data model; decision index; the parity list of production limits the tests must honour; pre-mortem; the design contract when `ui` (drive:architect; drive:designer) | DESIGN.md; `design/DESIGN.md`, `design/tokens.json`, `design/screens.yaml` | review passes and the parity list is complete, which blocks (same reviewer as spec) |
-| test-plan | design pass | claim to layer to test; kindness ledger; limits probe; `planned:` evidence in STATUS (drive:architect) | TESTPLAN.md; STATUS.md rows | one refutation test per claim at the cheapest real layer; every double has a guard, a live check, or an accepted risk (drive:grader first confirms every claim has a row and every double a ledger row; then drive:architect in fresh context at S to M, or drive:auditor at L to XL, judges the layer and the kindness answers) |
+| spec | research exit | capability map when warranted, then claims per module as headings, each with what would prove it wrong; out of scope; assumptions with reversal cost (drive:architect) | SPEC.md | claims refutable, constraints cite RESEARCH.md slugs (drive:architect in fresh context at S to M, one full round plus at most one scoped re-check, folded into the combined design and test-plan review at S; drive:auditor at L to XL, up to three full rounds) |
+| design | spec pass | architecture per surface; the contract between surfaces written before either side; data model; decision index; the parity list of production limits the tests must honour; pre-mortem; the design contract when `ui` (drive:architect; drive:designer) | DESIGN.md; `design/DESIGN.md`, `design/tokens.json`, `design/screens.yaml` | review passes and the parity list is complete, which blocks (same reviewer as spec; at S and M the review waits for the test plan and covers both) |
+| test-plan | design written | claim to layer to test; kindness ledger; limits probe; `planned:` evidence in STATUS (drive:architect) | TESTPLAN.md; STATUS.md rows | one refutation test per claim at the cheapest real layer; every double has a guard, a live check, or an accepted risk (drive:grader first confirms every claim has a row and every double a ledger row; then the combined design and test-plan review by drive:architect in fresh context at S to M, or drive:auditor's own test-plan review at L to XL, judges the layer and the kindness answers) |
 | decompose | test-plan pass | packages with disjoint ownership; wave order from the capability map's build order; wave 0 defined (drive:architect) | `.drive/packages/<id>/brief.md`; GOAL.md plan | no two packages in a wave share a path; each brief names claim, command, owned and forbidden paths (orchestrator) |
-| build | decompose exit | wave 0 alone, then waves of at most eight implementers; integration and commit per package; CONSTRAINTS.md measured after wave 0 and before wave 1's first integration commit (drive:implementer; orchestrator) | code, tests, commits | gates green, `drive.py guard` exits 0, ownership audit clean (drive:verifier per package) |
-| verify | a wave integrated | handoff per claim; a wave verifier on the seams; conformance against SPEC.md (drive:verifier; drive:grader) | `.drive/proofs/<key>/r<n>/verdict.json` | pass; rows at Local Proof (drive:verifier) |
+| build | decompose exit | wave 0 alone, then waves of at most eight implementers; integration and commit per package; CONSTRAINTS.md measured after wave 0 and before wave 1's first integration commit (drive:implementer; orchestrator) | code, tests, commits | gates green, `drive.py guard` exits 0, ownership audit clean (drive:verifier: one at S, one per wave at M, per package at L to XL and for any package carrying an auth, money, or data-loss claim) |
+| verify | a wave integrated | at M one handoff per wave that also covers the seams, split only when its claims exceed the handoff budget; at L to XL a handoff per package plus a wave verifier on the seams (`references/verification.md` section 2); conformance against SPEC.md (drive:verifier; drive:grader) | `.drive/proofs/<key>/r<n>/verdict.json` | pass; rows at Local Proof (drive:verifier) |
 | integrate | all waves verified | the whole system end to end locally, as a user would use it, plus one check against the real system (orchestrator) | `.drive/proofs/<key>/` | end-to-end smoke passes (drive:verifier) |
 | live-proof | integrate pass | deploy each surface through its tools; requests against deployed endpoints; the client against the deployed backend; external calls from the deployed runtime; UI captured on the real surface (orchestrator; drive:ui-reviewer) | `proof.json` with `environment: live` or `device` | every row whose live is y has `live:` evidence with `shim_differences` (drive:verifier) |
 | harden | live-proof pass | the full hardening order: severe tests, security review when `auth`, UI review, `/simplify` run by a `drive:implementer` under a package brief then re-gate, docs review | severe tests; `.drive/reviews/` | blocking findings fixed with regression tests (drive:verifier) |
 | docs | harden exit | README, runbook, and a `how-it-works.md` for the next session (drive:writer) | docs; `doc:` tokens | documented commands run from a clean checkout (orchestrator) |
 | retro, report | docs exit, or the run stopped | lessons; REPORT.md; final audit, always (drive:auditor) | `.drive/reviews/<date>-final-audit.json`, REPORT.md | `drive.py lint --final` passes (orchestrator) |
+
+Every classification, spec, design, and test-plan review round writes
+`.drive/reviews/<date>-<phase>-review-r<n>.md`; the bounds by size and what a scoped re-check reads
+are in `references/verification.md` section 6. At S and M the reviews exist to find blocking gaps
+early, not to polish: the linkkeeper run's later rounds did find real gaps, but three full rounds per
+artifact cost about three hours before any code at M.
 
 ## Research
 
@@ -92,9 +98,9 @@ skipped.
 | Size | What runs |
 |---|---|
 | XS | a script in one source file, plus its test, with a known shape: inline, no `.drive/`, one refutation test, commit body with claim and evidence |
-| S | a small tool: GOAL, STATE, STATUS; research as one or two RESEARCH.md rows; design as a paragraph in GOAL.md; decompose, integrate, and docs fold into build; one verifier |
-| M | the full table with a short DESIGN.md; verifier per package; scaled severe tests; CONSTRAINTS.md |
-| L | two surfaces: research lanes in parallel, contract first, live proof required, auditor review of spec and design, lessons |
+| S | a small tool: GOAL, STATE, STATUS; research as one or two RESEARCH.md rows; design as a paragraph in GOAL.md; spec, design, and test plan reviewed together in one round plus at most one scoped re-check; decompose, integrate, and docs fold into build; one verifier |
+| M | the full table with a short DESIGN.md; a spec review, then one combined design and test-plan review, each one full round plus at most one scoped re-check; a verifier per wave, with packages carrying auth, money, or data-loss claims verified alone; a severe test per claim, scaled to the diff; CONSTRAINTS.md |
+| L | two surfaces: research lanes in parallel, contract first, live proof required, auditor review of spec, design, and test plan of up to three full rounds each, a verifier per package, lessons |
 | XL | three or more surfaces: phase gates with a re-classification review by `drive:auditor`, an auditor mid-run audit after the walking skeleton, Workflow fan-out for research and review panels, per-phase budgets |
 
 ## Trait gates that commonly attach
@@ -123,7 +129,8 @@ remains, judged against the baseline `drive.py init` recorded, so the owner's ow
 untracked files are left alone.
 
 Parallelism is high: three to five research lanes run together, wave 0 runs serially, and later
-waves run up to eight implementers in the shared checkout with verifiers spawned as packages integrate. Review
+waves run up to eight implementers in the shared checkout with verifiers spawned as each wave integrates at M and as
+packages integrate at L and above. Review
 panels and screenshot judging use the Workflow tool, which only reads. Parallel design arms in
 worktrees are for a decision that reading cannot settle (`references/parallel.md` section 12).
 

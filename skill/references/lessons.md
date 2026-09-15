@@ -125,6 +125,9 @@ the class table, isolation order, and confirmation rules in `references/shapes/f
 - **Differential diagnosis.** Write three candidate mechanisms and, for each, the observation that
   would separate it from the others, before gathering evidence. This stops the first plausible
   story from being confirmed by default.
+- **Write down the shared premise.** When two fixes or workarounds for one failure have failed the
+  same gate, write the one sentence every attempt assumed and the observation that tests it, and run
+  that observation before the next fix. The assumption they share is often the part that is wrong.
 - **Bisect.** For regressions, `git bisect run <test command>` in a detached worktree under `/tmp` that
   is removed in the same step. For environment differences, change one variable at a time between the
   working and failing environments.
@@ -203,6 +206,11 @@ possible, turn the rule into something that fails loudly, and name it on the Che
 
 A rule whose Check line says "none" is still valid, but the auditor asks whether a check was
 possible and rejects a rule that could have been a test and was left as prose without a reason.
+
+Inside a project, choose the strongest check the situation allows, in this order: a state the types
+or schema cannot represent, then a lint rule or banned API that fails the gates, then one canonical
+helper every caller uses, then a runtime check. Agents copy whatever the surrounding code already does,
+so a weaker guard becomes the pattern the next change imitates.
 
 **An eval proves a skill lesson.** A rule in `general.md`, a domain file, or `capabilities.md` claims
 that following it changes what an agent does. Where a prompt and a small scaffold can set up the
@@ -292,8 +300,10 @@ one sentence of evidence:
 8. Where the situation can be set up as an eval case, does a case exist that scores below 1.0 without
    the rule and 1.0 with it, or that is committed and marked not yet run with a real reason; and where
    it cannot, does the Check line say why?
+9. Will the rule still hold once the paths, commit shas, versions, and names in the failure that
+   produced it have changed, or does it describe only that snapshot?
 
-Accept on yes to one through five and eight, and no to six and seven. Otherwise the candidate is
+Accept on yes to one through five, eight, and nine, and no to six and seven. Otherwise the candidate is
 rejected with the first failing question named: it stays in the project's LESSONS.md as a candidate,
 and a record goes to `references/lessons/rejected.md` with the heading, the date, the failing
 question, the reason, and the evidence that would change the verdict. A rejection is never queued for
@@ -431,8 +441,11 @@ lesson, so a stop never skips the retro:
    twice with the control the report proposes.
 4. Record grader canary results, blind re-grade agreement, and refuter disagreements, from the
    re-grade and dispositions files.
-5. From Discoveries, verifier rejections of work whose gates were green, and surprises, propose at
-   most five general candidates and any number of project facts; run each through dedupe, the
+5. Fill "Passed for the wrong reason" from mutants that survived, kindness rows found after a pass,
+   and gaps refuted in one round and confirmed in a later one: a gate that went green on a path the
+   defect never touched is not a failure event until it breaks, so the retro is where it is caught.
+   From those rows, Discoveries, verifier rejections of work whose gates were green, and surprises,
+   propose at most five general candidates and any number of project facts; run each through dedupe, the
    auditor, and its eval.
 6. Record which lessons appeared in briefs and which the verifier cited.
 7. Where a drive instruction caused or missed a failure, add an eval case and name the passage.

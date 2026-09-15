@@ -273,20 +273,13 @@ to be conservative or to report only important issues.
 | Kinder doubles | an external system with no statement of where its test stand-in is kinder and no real-semantics test |
 | Assumption honesty | an assumption stated as a requirement; an implausible reversal cost; one so costly it should have been the question |
 
-The reviewer writes `.drive/reviews/<YYYY-MM-DD>-spec-review-round-<n>.md`:
+Every round, a scoped re-check included, writes `.drive/reviews/<YYYY-MM-DD>-spec-review-r<n>.md` from
+`templates/review.md`, opening with `verdict: ready` or `verdict: not ready` and `round: <n>/<bound>`,
+and adds this table after its findings:
 
 ```markdown
-# Spec review · <spec path> · round <n>
-reviewer: drive:<agent> · model: <model it ran as>
-## Findings
-| severity | confidence | where | what is wrong | proposed fix |
-|---|---|---|---|---|
-| blocking \| should_fix \| note | 25 \| 50 \| 75 \| 100 | <heading words or section> | <one or two sentences> | <fix> |
 ## Cheat attempts
 | requirement | implementation that passes and fails the user | caught by |
-## Verdict
-verdict: ready | not ready
-reason: <the single most important reason>
 ```
 
 Reconcile each finding in order, stopping at the first that fits: the template or rubric was unclear
@@ -297,11 +290,18 @@ context to the spec). A dispute over a blocking finding goes once to `drive:audi
 and you write the DECISIONS.md entry from the ruling. When the auditor was the reviewer, you decide
 and log it with its reversal cost.
 
-Two rounds at most. Round two is a fresh instance of the same agent type, given the diff since round
-one and the round-one file. Afterwards, unresolved `should_fix` and `note` findings go into Risks in
-the reviewer's words; a finding still `blocking` is decided and logged with its reversal cost and a
-Risks entry, or, if it passes every test in section 8, becomes the single question. Never run a third
-round; needing one means the goal was ambiguous, which is what the question is for.
+Rounds follow size, as `references/verification.md` section 6 sets them, and every round and re-check writes `.drive/reviews/<date>-spec-review-r<n>.md` from `templates/review.md`. At S and M the spec gets one
+full round and at most one scoped re-check, and at S that round is the combined review of spec, design,
+and test plan. The re-check is a fresh instance of the same agent type given the previous round's file,
+the spec's diff since that round, and the sections each blocking finding names; it answers each of those
+findings `closed` or `open` with evidence and raises a new blocking finding only where the revision
+introduced it. At L and XL `drive:auditor` runs up to three full rounds, each a fresh instance given the
+diff since the previous round and that round's file. Afterwards, unresolved `should_fix` and `note`
+findings go into Risks in the reviewer's words. A finding still `blocking` at the bound becomes a
+proposed decision record holding both positions, logged with its reversal cost, a Risks entry, and a
+line in STATE.md's Open failures, and the work proceeds on the reviewer's position; if it passes every
+test in section 8, it becomes the single question instead. Never run a round past the bound; needing
+one means the goal was ambiguous, which is what the question is for.
 
 ## 13. The spec gate
 
@@ -309,7 +309,8 @@ The gate passes when all of these hold; commit them together with a message nami
 claim count:
 
 1. `drive.py lint --gate spec` exits 0, run from the skill directory as SKILL.md writes it.
-2. The latest review ends `verdict: ready`, or round two closed under section 12's rules.
+2. The latest review file opens with `verdict: ready`, or the last round its size allows closed under
+   section 12's rules.
 3. STATUS.md has exactly one row per claim heading (requirements and invariants), keyed by its slug,
    at Missing, with `live` set and `[ui]` marked.
 4. Guidance comments from the template are gone, the version line is filled, and Changes exists.
@@ -354,8 +355,8 @@ mirage.
 | "Naming the stack in the spec saves design a step." | Every design improvement then becomes a spec change, reviewed with the wrong rubric. |
 | "Competitors all have it, so it's a requirement." | Research enters as non-goals and table stakes; the budget is fixed, so every addition displaces something. |
 | "The code is right, so update the spec to match." | That erases the record of what was asked; run section 14 so the change is visible and the rows re-verify. |
-| "The reviewer only found nitpicks; skip round two." | Findings are filtered by reconciliation, not by skipping the step. |
-| "The review keeps finding things; one more round." | Two rounds is the bound; what remains goes to Risks or becomes the question. |
+| "The reviewer only found nitpicks; no need to reconcile them." | Findings are filtered by reconciliation, not by skipping the step. |
+| "The review keeps finding things; one more round." | The bound is one round and a scoped re-check at S and M, and three rounds at L and XL; what remains goes to Risks or becomes the question. |
 
 ## 16. Red flags
 

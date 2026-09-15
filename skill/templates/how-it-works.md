@@ -28,6 +28,15 @@ same findings go to STATE.md Verified facts. Procedure: references/research.md s
 
 Baseline: <passed>/<total> at <short sha>; failing before any change: <test names or none>.
 
+## Drive the app
+<!-- Delete when the project has no runnable app. A recipe a later session follows instead of
+rediscovering it, committed with this note and proved once by running launch, doctor, one feature,
+and cleanup (references/research.md section 13). One Feature line per user-facing feature. -->
+Launch:  `<command>` · ready when <log line, port answering, or health response> · process ids recorded in `.drive/local/` [ran `<command>`]
+Doctor:  `<read-only command>` shows the running instance is the build under test: <build stamp, version, or commit> [ran `<command>`]
+Feature: <user-facing feature> · entry point <route, screen, or command> · end state <what an agent observes> [ran `<command>`]
+Cleanup: `<command>` stops only the recorded process ids and leaves `.drive/proofs/` intact [ran `<command>`]
+
 ## Dialect
 <!-- For each kind of thing the goal adds, the three nearest existing examples and the shape they share.
 The architect copies this section into the change spec. -->

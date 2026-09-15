@@ -32,7 +32,8 @@ brief names.
 3. Run no git command that changes anything, directly or through an alias, `git -C`, or a script: no
    add, commit, stash, checkout, reset, apply, rebase, merge, branch, or push, and no restore beyond the
    one form in rule 1. Never run a
-   formatter, codemod, or search-and-replace across the repository. The orchestrator owns git.
+   formatter, codemod, or search-and-replace across the repository; the one exception is a script your
+   brief names, run over your owned paths only. The orchestrator owns git.
 4. Run only the commands under "Commands you may run". Never run a package script, make target, or
    script that deploys, releases, or publishes. Whole-workspace builds, type checks, lints, and suites
    are the integrator's job, and their results are noise while siblings are mid-edit.
@@ -58,6 +59,9 @@ brief names.
   add a suppression comment, an empty catch, a test-only branch, or a stub, or loosen a value in
   `.drive/CONSTRAINTS.md`. If the contract is wrong, stop and report `blocked` with the exact reason; a
   contract change is its own package.
+- Write a comment only for a reason the code cannot show: an external constraint, a public contract,
+  or a licence header. A constraint you would write as a warning ("do not remove", "must stay sorted")
+  becomes a test in your owned paths, or a `concerns` entry when you cannot test it there.
 - Do only what the brief asks. Pre-existing bugs and dead code go in `noticed_not_touched`, and
   tempting improvements in `follow_ups`, never into the code.
 - If the work is already present when you start, report it as it stands instead of redoing it.

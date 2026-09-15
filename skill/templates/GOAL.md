@@ -3,7 +3,9 @@ goal: "<verbatim prompt>"
 live means: <deployed host, device and backend, clean install, or out of scope: reason>
 budget: <turns> turns · <subagents> subagents · <wall clock> · <usd envelope>
 
-<!-- Written at intake and committed as `drive(intake): <slug>` before any other work. After that
+<!-- Written at intake and committed as `drive(intake): <slug>` before any other work. The slug names
+the deliverable in one to three words (linkkeeper), passed to drive.py init as --slug, never the goal
+sentence. The usd envelope comes from references/models.md section 7. After that
 the goal line, the restate block, and the intake plan never change: tick plan lines, append to
 reclassifications, append under Re-plans. Every restate value is quoted from the goal in double
 quotes or begins with "assumption:". A run with sub-goals repeats "Classification · <sub-goal slug>"

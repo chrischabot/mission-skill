@@ -5,8 +5,8 @@
 set -euo pipefail
 
 git init -q -b main .
-git config user.name "Eval Fixture"
-git config user.email "fixture@example.invalid"
+git config user.name "Alex Morgan"
+git config user.email "alex@example.invalid"
 git config commit.gpgsign false
 
 mkdir -p notes tests

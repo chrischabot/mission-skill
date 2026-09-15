@@ -6,7 +6,7 @@ implementation, independent adversarial verification, UI verification with visio
 failure investigation distilled into lessons, and compounding those lessons back into the skill. It
 scales from a one-line fix to a greenfield product without ceremony that does not pay for itself.
 
-Last updated 2026-09-15 by the coordinating session.
+Last updated 2026-09-15 by the coordinating session, after the post-run fixes.
 
 ## Where things stand
 
@@ -45,10 +45,9 @@ happened:
 
 ## What is not yet proven
 
-- **Planning cost at size M.** The linkkeeper run spent about three hours on intake, research, spec,
-  design and test plan before any code, each planning artifact using three review rounds, and per-package
-  verification then failed most units once or twice. `research/40` recommends a lower round bound
-  and wave-level verification as the default at M; neither is applied yet.
+- **Planning cost at size M.** The linkkeeper run spent about three hours planning. S and M now get one
+  full review round plus one scoped re-check, a combined design and test-plan review, and wave-level
+  verification at M; every review round leaves a file that lint checks. No run has yet measured the saving.
 - **The cost envelopes rest on one run.** Only the `build` row was rescaled; the other rows are still
   modelled.
 - **No gating eval run.** The suite has single-run scores only; `skill/evals/README.md` section 3 has
@@ -60,7 +59,6 @@ happened:
   `--settings` env block takes effect, and whether a subagent can invoke the bundled
   `security-review` skill. The headless linkkeeper run found the bundled security-review, simplify,
   code-review and workflow-authoring skills unavailable and substituted drive's own agents.
-- **Owner decision pending:** which recommendations from `research/38-pstack-evaluation.md` to apply.
 
 ## Where to read
 
@@ -76,7 +74,7 @@ happened:
 - `research/30-compare-mission-vs-drive.md`: comparison with the earlier `mission` skill.
 - `research/33` to `37`: the model and cost audit, the whole-project review, the behaviour changes it
   produced, the completion checklist (done), and the review of the fixes.
-- `research/38-pstack-evaluation.md`: what drive could take from cursor/plugins pstack (not applied).
+- `research/38-pstack-evaluation.md`: what drive could take from cursor/plugins pstack (applied on 2026-09-15, with its MIT notice).
 - `research/39-run-lessons-verification.md` and `research/40-linkkeeper-run-review.md`: the first
   complete run and the lessons carried from it.
 

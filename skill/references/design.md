@@ -97,7 +97,7 @@ cannot tell absence from oversight.
 | 1 | Context | at most three paragraphs: what the system does, who calls it, what exists; link SPEC.md |
 | 2 | Components | per component: one responsibility, what it owns, what it must never do |
 | 3 | Data model | keys, types, indexes with the query each serves; rows at launch, one year, and a lucky scale; row size; retention; personal data; soft delete; identifier scheme; every platform limit that bites, with headroom and its RESEARCH.md slug |
-| 4 | Contract | the contract's specification, which the wave 0 package builds (section 6): location; exact emit, check, and generate commands; per operation the method and path (or command, event), auth, idempotency, request and response fields, error cases, and the fixture cases to write by name; error shape, pagination, timestamps, versioning. Once `contracts/` exists, point at its schemas instead of copying them |
+| 4 | Contract | the contract's specification, which the wave 0 package builds (section 6): first two or three call sites written as a caller would write them, with the types then reconciled to that usage; location; exact emit, check, and generate commands; per operation the method and path (or command, event), auth, idempotency, request and response fields, error cases, and the fixture cases to write by name; error shape, pagination, timestamps, versioning. Once `contracts/` exists, point at its schemas instead of copying them |
 | 5 | Auth model | identities and how each authenticates; token lifetimes and rotation; one rule per resource, "a caller may X a Y when Z"; where secrets live; what revocation does |
 | 6 | Failure semantics | section 5's first table |
 | 7 | Idempotency | section 5's second table |
@@ -267,21 +267,37 @@ with severity and confidence; you filter afterwards. Each dimension scores 0 (ab
 | Cost | Is the envelope present, with assumptions, a dominant line, and a kill switch? |
 | Operability | Can someone find what broke from the events and the stated questions alone? |
 | Data lifecycle | Are retention, deletion, backup, restore, and export stated? |
+| Interface depth | Does each module hide more than its interface costs to learn, and does each representation decision live in one module? |
+
+Interface depth scores down for four red flags, which are John Ousterhout's from *A Philosophy of
+Software Design*: a shallow module, whose callers coordinate several calls for one operation or whose
+options expose its internal stages; information leakage, where one representation, policy, or wire
+format appears in more than one module; temporal decomposition, where modules follow execution order
+(load, validate, save) rather than the knowledge they own; and a pass-through method that forwards its
+arguments unchanged. A deep module is not a deep call chain, which spreads understanding across layers.
+At L and above, a design decision that crosses a module or service boundary records in section 18 at
+least one structurally different alternative, not a variant of the chosen shape, and why it lost; the
+reviewer checks it under Simplicity.
 
 A 0 on failure handling, security boundaries, or testability blocks, as does an absent cost envelope
-when the system pays per use.
+when the system pays per use. A 0 on interface depth is `should_fix`, never blocking.
 
-**Verdict file.** `drive:auditor` writes `.drive/reviews/<date>-design-<slug>.json`. `drive:architect`,
-reviewing at S and M, writes the same document inside a `json` fence to
-`.drive/reviews/<date>-design-<slug>.md`, because the guard lets only a reviewing agent (verifier,
-grader, UI reviewer, auditor, or security reviewer) write a JSON file under `.drive/reviews/`. That
-path is the design gate's `review:` evidence.
+**Verdict file.** Every round, a scoped re-check included, writes
+`.drive/reviews/<date>-design-review-r<n>.md` from `templates/review.md`, opening with `verdict: not
+ready` when the scored verdict below is `block` and `verdict: ready` otherwise, then `round: <n>/<bound>`.
+A combined round writes `.drive/reviews/<date>-test-plan-review-r<n>.md` beside it with the test plan's
+own verdict and findings. `drive:auditor` also writes the scored document below to
+`.drive/reviews/<date>-design-<slug>.json`. `drive:architect`, reviewing at S and M, puts the same
+document inside a `json` fence in the review file's Notes, because the guard lets only a reviewing
+agent (verifier, grader, UI reviewer, auditor, or security reviewer) write a JSON file under
+`.drive/reviews/`. The scored document, or the review file holding it, is the design gate's `review:`
+evidence.
 
 ```json
 { "verdict": "pass | pass-with-changes | block", "reviewer": "drive:auditor (fable)",
   "inputs": [".drive/DESIGN.md@<sha>", "contracts/@<sha> when it exists"],
   "scores": { "simplicity": 2, "boring": 1, "single_source": 2, "failure": 1, "security": 2, "scaling": 2,
-              "lockin": 2, "testability": 2, "cost": 1, "operability": 1, "data": 2 },
+              "lockin": 2, "testability": 2, "cost": 1, "operability": 1, "data": 2, "depth": 2 },
   "findings": [{ "severity": "blocking | should_fix | note", "confidence": "25 | 50 | 75 | 100",
                  "dimension": "failure", "where": ".drive/DESIGN.md#6-failure-semantics", "claim": "<what is wrong>",
                  "evidence": "<what shows it>", "fix": "<change>", "needs_decision_record": false }],
@@ -294,12 +310,16 @@ path is the design gate's `review:` evidence.
 findings remain; otherwise `pass`. `rubric_gap` names where the rubric did not fit the deliverable,
 which is different from work not done.
 
-**Rounds and disputes.** The architect revises against blocking findings and a fresh reviewer runs the next round with the
-previous gaps in its handoff; at most three rounds. A disputed blocking finding goes once to a fresh
+**Rounds and disputes.** The architect revises against blocking findings, and a fresh reviewer runs
+each later round with the previous gaps in its handoff. At S and M the design is reviewed together with
+the test plan in one full round plus at most one scoped re-check of that round's blocking findings; at
+L and XL `drive:auditor` runs up to three full rounds. `references/verification.md` section 6 holds the
+bounds and what a re-check reads. A disputed blocking finding goes once to a fresh
 `drive:auditor` with `.drive/reviews/<date>-dispute-<key>.md`; it rules `defect`, `not_a_defect`, or
-`rubric_ambiguous`, and you write the DECISIONS.md entry from the ruling. A block still open after round three becomes a
-proposed decision record holding both positions; the build proceeds on the reviewer's position and the
-open gap goes into STATE.md and the report. A review with no findings on a design at M or above is
+`rubric_ambiguous`, and you write the DECISIONS.md entry from the ruling. A block still open at the
+bound, after the re-check at S and M or after round three at L and XL, becomes a proposed decision
+record holding both positions; the build proceeds on the reviewer's position and the open gap goes into
+STATE.md and the report. A review with no findings on a design at M or above is
 itself a finding: run one fresh reviewer told to name the three weakest points with evidence. For XL
 builds and migrations, competing designs are judged as `references/parallel.md` section 12 describes.
 
@@ -346,6 +366,12 @@ with `contracts/`, the schema or migrations, and the code, listing each differen
 code is right, the architect corrects the document; where the code breaks an accepted decision or a
 claim, the difference is a gap for the verifier, never a document edit. Then update `reconciled at`.
 The contract drift check runs before every integration commit, and a failure stops the commit.
+
+Three signs during the build mean the design is wrong rather than a package: the same workaround shape
+recurring across packages, types that need casts or optional fields that are always set in practice,
+and callers that must know an abstraction's internal rules to use it. Record each against its decision
+in section 18 and treat it as `references/verification.md` section 6 treats the same defect class
+confirmed twice.
 
 ## 13. The design gate
 

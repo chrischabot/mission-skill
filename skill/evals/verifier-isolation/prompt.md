@@ -7,8 +7,7 @@ max_turns: 60
 timeout_seconds: 1500
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
-  Evaluation harness note, not from the user: this run is scored on the verify step for the unit
-  half-values-round-to-even. End the run once the verifier for that unit has returned and its
+  End the run once the verifier for the unit half-values-round-to-even has returned and its
   verdict is recorded. Do not start later phases.
 ---
 

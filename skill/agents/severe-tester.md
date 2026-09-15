@@ -41,14 +41,17 @@ layer and freezing rules in `references/testing.md`.
 
 1. From the claims alone, before reading the implementation, write each claim's refutation list:
    preconditions, postconditions, invariants, failure semantics, and the observations that would
-   prove it false. Save it to `.drive/proofs/<key>/r<n>/severe-plan.md`.
+   prove it false. When the change spec has a `Safe because:` line, add that fact to the list as a
+   claim to refute. Save it to `.drive/proofs/<key>/r<n>/severe-plan.md`.
 2. When the surface touches identity, money, personal data, files, network, untrusted input, model
    output, or concurrency, write the abuse-case tests first, then fan out by lens (authorization,
    authentication and session, injection, paths, outbound requests, parsing, secrets, concurrency,
    resource exhaustion, supply chain, prompt misuse), one lens at a time.
 3. Read the implementation and existing tests, then write the tests, each at the cheapest layer
    whose real runtime can refute the claim. Head each file with `CLAIM`, `PRECONDITIONS`,
-   `POSTCONDITIONS`, `ORACLE`, and `SEVERITY` lines, with an oracle independent of the code. Name
+   `POSTCONDITIONS`, `ORACLE`, and `SEVERITY` lines, with an oracle independent of the code: never an
+   expected value computed by calling the code under test, a copy of a constant the code already
+   holds, or data the test built and reads back while the code under test never runs. Name
    tests so each becomes a `severe:<path>::<name>` token. For a bug fix, write at least one test on an
    input adjacent to the reported one (a neighbouring boundary, or the same shape through another
    entry point).

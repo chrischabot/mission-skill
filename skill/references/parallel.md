@@ -91,6 +91,13 @@ package is already merged. A client that cannot compile in parallel (one project
 cache) is a design defect to raise at the `design` gate: split it into per-feature modules with a
 thin app target in wave 0.
 
+When a wave holds four or more packages cut from one pattern, as a `move` across call sites or a
+`build` with many similar modules usually does, run one of them alone through integration and its
+verifier round first. Wave 0 proves the scaffold, not the brief: a flaw in how the briefs were cut,
+what their test commands cover, or how large each package is would otherwise appear in every package
+of the wave and cost a fix round for each. Correct the remaining briefs or the package size from what
+the pilot shows, record the change in DECISIONS.md, then start the rest.
+
 ## 4. Execution mode
 
 Use Workflows only for reading and judging; every edit goes through an Agent call.
@@ -190,8 +197,11 @@ order:
    `deps_requested` in one command so the lockfile changes once.
 4. Run the full gates (build, type check, lint, whole test suite) plus at least one check against a
    real runtime rather than a shim, and print the `DRIVE · VERIFY` block.
-5. Green: commit per package, staging that package's `files` and the wiring you applied for it by
-   explicit path, never `git add -A`. Message `<type>(<area>): <claim words> [pkg <id>]`. Record the
+5. Green: commit per package, staging by explicit path only that package's `files`, the wiring you
+   applied for it, the frozen tests it turns green, and its `.drive/packages/<id>/report.json`. Never
+   run `git add -A`, `git add .`, or `git add .drive` while any agent is running: a directory-wide add
+   takes whatever another agent has written and not yet committed, and one run swept a verifier's
+   uncommitted verdict rewrite into a package commit that way. Message `<type>(<area>): <claim words> [pkg <id>]`. Record the
    sha in `index.md`.
 6. Red: map each failing test to its owning package by path and send that package to a fix round
    with the command and output tail. Commit nothing red. Fix red in a wiring seam yourself.
@@ -207,24 +217,34 @@ reported paths after its own test command passes; the full gates still run befor
 
 ## 8. Verification
 
-**Per package.** After the package is committed, build `.drive/handoffs/<unit>.md`, or `<unit>-r<n>.md` for a later round (the unit is the
-package id) from the handoff template: the repository root as an absolute path, brief path, claim,
+**The unit follows size** (`references/verification.md` section 2). At S one verifier covers the run.
+At M one handoff covers a wave once its packages are integrated and committed, split into as few
+handoffs as the budget line allows, and a package carrying an `auth`, money, or data-loss claim is
+verified alone. Per-package handoffs are the default only at L and XL.
+
+**The handoff.** After the packages it covers are committed, build `.drive/handoffs/<unit>.md`, or
+`<unit>-r<n>.md` for a later round (the unit is the package id, or `wave-<n>` for a wave handoff), from
+the handoff template: the repository root as an absolute path, brief path, claim,
 commit range, changed files taken from git, wiring items, validation commands written as
 `cd <root> && <command>`, the lessons list, and the verdict schema path. It carries nothing from the
 maker's summary, gaps, or reasoning. Spawn `drive:verifier` with the handoff; a wave's verifiers are
-read-only and may run as parallel background calls. Each writes its verdict under the package's
-claim key, `.drive/proofs/<claim key>/r<n>/verdict.json`, against `templates/verdict.schema.json`, so
-the STATUS row's `verdict:` token and the proof directory share one key. A changed file outside the ownership globs is a `blocking` gap
+read-only and may run as parallel background calls. A package handoff's verifier writes its verdict under the
+package's claim key, `.drive/proofs/<claim key>/r<n>/verdict.json`, against
+`templates/verdict.schema.json`, so the STATUS row's `verdict:` token and the proof directory share one
+key; a wave handoff's verifier writes `.drive/proofs/wave-<n>/r<m>/verdict.json` listing each claim key
+in `claims[]`, and every STATUS row it covers names that file. A changed file outside the ownership globs is a `blocking` gap
 whatever its quality. Only a passing verdict moves a STATUS row to Local Proof or above, and only one
 the verifier wrote itself: drive's hooks record its hash in the provenance ledger when the verifier
 stops, and the lint refuses a verdict file you copied, edited, or wrote.
 
-**Per wave.** One more `drive:verifier` checks the seams: consumers against their contract
+**The seams.** At L and XL one more `drive:verifier` per wave checks the seams: consumers against their contract
 package, every wiring line, and, for each shim or fake the wave introduced, where it is kinder
-than production. It re-runs the full gates rather than trusting your transcript. Then commit the
+than production. It re-runs the full gates rather than trusting your transcript. At M the wave handoff covers the
+seams itself. Then commit the
 wave's STATUS rows as `chore(drive): wave <n> status`.
 
-**Rounds.** A failing verdict returns the package with the verdict's `for_maker` text. Limits, as
+**Rounds.** A failing verdict returns each package whose claims hold a confirmed blocking gap, with the
+verdict's `for_maker` text. Limits, as
 SKILL.md section 5 sets them: `fix` 2; `feature` and `report` 3; `publish` 3 per phase gate; `build`
 3 per milestone plus 2 final; `move` 3 per phase and 4 at cutover; `operate` 2 per observed step. A blocking gap that returns after a fix needs an investigation record before
 more code changes. A dispute with a verifier goes once to `drive:auditor` with
@@ -237,8 +257,8 @@ and you write the DECISIONS.md entry from the ruling (`references/verification.m
 |---|---|---|---|---|
 | XS | none | none | commit body records claim and evidence | none |
 | S | 1 | 1 | one verifier | up to 3 investigators or researchers |
-| M | 2 to 6 | up to 5 | verifier per package, one per wave | one review panel if the shape calls for it |
-| L | 6 to 20 | up to 8 | as M, plus a review panel per milestone | one Workflow per phase |
+| M | 2 to 6 | up to 5 | one verifier per wave, covering the seams; a package with an auth, money, or data-loss claim verified alone | one review panel if the shape calls for it |
+| L | 6 to 20 | up to 8 | a verifier per package and one per wave on the seams, plus a review panel per milestone | one Workflow per phase |
 | XL | more than 20 | up to 8 | as L | one Workflow per phase or subsystem |
 
 Read-only fan-outs may run up to the Workflow cap of 16 concurrent agents. Keep each Workflow under
@@ -342,7 +362,11 @@ verifier cost less. Give two or three arms the same goal, acceptance tests, and 
 each with one distinct approach constraint. Run them in worktrees as background calls, commit each,
 and record its sha, benchmark output, and a one-paragraph rationale. A fresh judge that authored no
 arm receives the rubric, tests, numbers, and worktree paths, and must name the deciding evidence.
-Land the winner, remove the losers in the same step, and record the comparison in RESEARCH.md.
+Land the winner, remove the losers in the same step, and record the comparison in RESEARCH.md. An
+idea worth keeping from a losing arm becomes its own small package, briefed and verified like any
+other, never a paste into the winner at landing. When the arms disagree on the shape of the answer
+rather than its quality, the goal or the acceptance tests left the shape open: record the
+clarification in DECISIONS.md and re-run the arms against it instead of choosing.
 
 | Decided by | Judge |
 |---|---|

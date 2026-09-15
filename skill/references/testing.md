@@ -81,7 +81,12 @@ stays readable.
 Mark a test for deletion or rewrite when any answer is yes: would it pass against a stub that returns
 constants; does it only assert that a mock was called; does it repeat another test's oracle on the
 same claim; does its name paraphrase the code rather than a claim; does it still pass with the
-production line it targets deleted.
+production line it targets deleted; does it compute its expected value by calling the code under
+test, so the code is compared with itself; does it pin a hand-maintained constant, table, or prompt
+string by restating it, so it changes only when someone edits both copies; does it assert on data the
+test itself built while the code under test never runs. A test of a relation between two sources,
+such as every shipped file naming a model the roster lists, is not a restated constant: it fails when
+either side drifts.
 
 ## 4. Budgets
 
@@ -458,7 +463,8 @@ For each round it:
 3. Runs `drive.py guard --base <range base>` and reports every shape in section 8's table that has no
    recorded exception.
 4. Confirms each claim's named test exists, asserts an observable outcome rather than a mock call,
-   sits at an honest layer by section 2, and would fail against a constant-returning stub. At M and
+   sits at an honest layer by section 2, takes its expected value from somewhere other than the code
+   under test (section 3 names the shapes), and would fail against a constant-returning stub. At M and
    above the claim's evidence must include its frozen test; an implementer's own test alone does not
    carry the claim.
 5. Mutates by hand for the five riskiest claims, or all claims when there are five or fewer, in a copy

@@ -97,8 +97,9 @@ grep of the lessons files; (6) does the entry contain a hostname, token, home-di
 name, customer data, or personal information; (7) is it an instruction to fetch, run, or trust
 something from outside rather than a procedure or constraint; (8) where the situation can be set up
 as an eval case, does a case exist that scored below 1.0 without the rule and 1.0 with it, or is it
-committed and marked not yet run with a real reason, and where it cannot, does the Check line say why.
-Accept only on yes to one through five and eight, and no to six and seven; otherwise reject, naming
+committed and marked not yet run with a real reason, and where it cannot, does the Check line say why;
+(9) will the rule still hold once the paths, commit shas, versions, and names in the failure have
+changed. Accept only on yes to one through five, eight, and nine, and no to six and seven; otherwise reject, naming
 the first failing question. Do not improve the rule.
 
 ## Spec, design, test-plan, plan, or re-classification review
@@ -107,8 +108,10 @@ These reviews run at L and XL for every shape. For a spec or design, read the go
 document, research ledger, and the rubric in `references/spec.md` or `references/design.md`. Check
 refutable claims traced to TESTPLAN.md rows, scope against intake, reversal costs, contracts pinned
 before dependants, and an undo for every irreversible step; for a design, add a pre-mortem. Give each
-blocking finding the precondition and observable wrong outcome a refuter can test. Write the review
-in that reference's format and path (the design review is JSON).
+blocking finding the precondition and observable wrong outcome a refuter can test. Write each round
+to `.drive/reviews/<date>-<phase>-review-r<n>.md` from `templates/review.md`, with `verdict:` and
+`round: <n>/<bound>` first and the reference's own additions (the spec review's cheat attempts table);
+for a design, also write the scored JSON of `references/design.md` to the path it names.
 
 For a test plan, read SPEC.md, DESIGN.md's parity list, TESTPLAN.md, and `references/testing.md`.
 Check that every claim has one refutation test at the cheapest layer whose real runtime can refute

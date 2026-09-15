@@ -172,6 +172,71 @@ def slugify(text: str, limit=None) -> str:
     return slug
 
 
+SLUG_LIMIT = 40
+SLUG_LEAD_INS = ("please", "i want to", "i want", "i need to", "i need", "we need to", "we need", "i'd like to",
+                 "i would like to", "we want to", "can you", "could you", "help me", "let's", "lets", "we should")
+SLUG_VERBS = {
+    "add", "adopt", "allow", "analyse", "analyze", "audit", "automate", "backfill", "build", "bump", "change", "clean",
+    "configure", "connect", "convert", "create", "debug", "decommission", "delete", "deploy", "deprecate", "design",
+    "diagnose", "document", "draft", "drop", "enable", "ensure", "evaluate", "expose", "extend", "extract", "find", "finish",
+    "fix", "harden", "implement", "import", "improve", "integrate", "introduce", "investigate", "launch", "make", "measure",
+    "migrate", "monitor", "move", "operate", "optimise", "optimize", "patch", "port", "profile", "prototype", "publish",
+    "record", "reduce", "refactor", "reject", "release", "remove", "rename", "repair", "replace", "report", "research",
+    "resolve", "restore", "restructure", "rewrite", "rotate", "run", "scaffold", "set", "ship", "simplify", "speed",
+    "split", "stop", "support", "test", "tidy", "track", "update", "upgrade", "validate", "verify", "wire", "write",
+}
+SLUG_PARTICLES = {"up", "out", "down", "off", "over", "away", "back", "into"}
+SLUG_DETERMINERS = {"a", "an", "the", "our", "my", "your", "their", "its", "this", "that", "these", "those", "some"}
+# Words that end the first noun phrase. "of" is not one: "a list of bookmarks" names the deliverable.
+SLUG_PHRASE_ENDS = {
+    "to", "for", "in", "on", "at", "with", "without", "and", "or", "but", "nor", "that", "which", "who", "whose", "where",
+    "when", "while", "so", "from", "by", "into", "onto", "via", "using", "across", "under", "over", "than", "as", "if",
+    "because", "before", "after", "until", "since", "per", "against", "between", "through", "within", "instead", "then",
+    "is", "are", "was", "were", "be", "should", "must", "can", "could", "will", "would", "does", "do",
+}
+
+
+def derive_slug(goal_text, limit=SLUG_LIMIT):
+    """A run slug naming the deliverable: the goal's first noun phrase after a leading verb, whole words only, within
+    `limit` characters. "Build linkkeeper, a small self-hosted bookmarks manager" gives linkkeeper; "Fix the flaky bulk
+    lookup test" gives flaky-bulk-lookup-test. A goal with no phrase after its verb falls back to its opening words."""
+    first_line = next((l for l in (goal_text or "").splitlines() if l.strip()), "")
+    clause = re.split(r"[,;()\[\]!?—–]|[.:](?:\s|$)|\s-\s", first_line, maxsplit=1)[0]
+    words = [w.strip("\"'`*_") for w in clause.split()]
+    words = [w for w in words if slugify(w)]
+    lowered = [w.lower() for w in words]
+    start = 0
+    for lead in sorted(SLUG_LEAD_INS, key=len, reverse=True):
+        parts = lead.split()
+        if lowered[:len(parts)] == parts:
+            start = len(parts)
+            break
+    if start < len(lowered) and lowered[start] in SLUG_VERBS:
+        start += 1
+        if start < len(lowered) and lowered[start] in SLUG_PARTICLES:
+            start += 1
+    while start < len(lowered) and lowered[start] in SLUG_DETERMINERS:
+        start += 1
+    phrase = []
+    for word in lowered[start:]:
+        if word in SLUG_PHRASE_ENDS:
+            break
+        phrase.append(word)
+
+    def within(candidates):
+        out = ""
+        for piece in (p for word in candidates for p in slugify(word).split("-")):
+            joined = piece if not out else out + "-" + piece
+            if out and len(joined) > limit:
+                break
+            out = joined
+            if len(out) >= limit:
+                break
+        return out
+
+    return within(phrase) or within(lowered)
+
+
 def read_text(path: Path):
     try:
         return path.read_text(encoding="utf-8")
@@ -2133,11 +2198,67 @@ def check_state(ctx, f, mode):
             if len(new_entries) <= len(old_entries):
                 f.fail(name, "status was blocked at HEAD and is {} now with no new DECISIONS.md entry. A blocked run continues "
                        "only after one DECISIONS.md entry names the evidence that its blocking condition cleared.".format(fields["status"]))
+    open_line = earliest_open_plan_line(ctx.goal, fields.get("phase"))
+    if open_line:
+        f.warn(name, "phase {} is later than the earliest open plan line in GOAL.md (line {}: '{}'). The phase field names "
+               "the earliest gate still open: tick that line when its exit is met, or set phase: {}.".format(
+                   fields.get("phase"), open_line[0], open_line[1][:160], open_line[2]))
     lines = state.text.count("\n") + 1
     if lines > 150 or len(state.text.encode("utf-8")) > 12000:
         f.fail(name, "has {} lines; the budget is 150. Move closed failures out and delete what git already records.".format(lines))
     elif lines > 120:
         f.warn(name, "has {} lines and is nearing the 150-line budget.".format(lines))
+
+
+def earliest_open_plan_line(goal, phase):
+    """(line number, line, phase) of GOAL.md's first unticked plan line when STATE.md's phase comes after it, else None.
+    Order is the plan's own where the phase has a plan line, since shapes order their phases differently from PHASES;
+    otherwise it is PHASES order."""
+    if goal is None or phase not in PHASES:
+        return None
+    lines = [(n, l, PLAN_RE.match(l)) for n, l in goal.plan]
+    lines = [(n, l, m) for n, l, m in lines if m]
+    phases = [m.group("phase") for _, _, m in lines]
+    first = next((i for i, (_, _, m) in enumerate(lines) if m.group("tick") == " "), None)
+    if first is None:
+        return None
+    open_phase = phases[first]
+    if phase in phases:
+        later = phases.index(phase) > first
+    else:
+        later = open_phase in PHASES and PHASES.index(phase) > PHASES.index(open_phase)
+    return (lines[first][0], lines[first][1], open_phase) if later else None
+
+
+SPEND_FILES = ("RESEARCH.md", "STATE.md", "REPORT.md")
+SPEND_LINE_RE = re.compile(r"(?i)\bspend:\s*(.*)$")
+DOLLAR_FIGURE_RE = re.compile(r"(?i)\$\s*\d|\b\d[\d,]*(?:\.\d+)?\s*(?:usd|dollars)\b")
+SPEND_SOURCE_RE = re.compile(r"(?i)total_cost_usd|/usage|budget line|\brecorded\b|\bmeasured\b")
+SPEND_MESSAGE = ("a spend figure must come from a recorded total (total_cost_usd, /usage, or the harness budget line) "
+                 "or say not measured")
+
+
+def check_spend(ctx, f):
+    """Warn on a dollar spend figure that names no recorded source: a `spend:` line in RESEARCH.md, STATE.md, or
+    REPORT.md (the segment after `spend:` up to the next ` · `), and each line of REPORT.md's Spend section."""
+    for name in SPEND_FILES:
+        text = read_text(ctx.drive / name)
+        if text is None:
+            continue
+        candidates = []
+        for number, line in enumerate(text.splitlines(), 1):
+            match = SPEND_LINE_RE.search(line)
+            if match:
+                candidates.append((number, match.group(1).split(" · ")[0]))
+        if name == "REPORT.md":
+            candidates.extend((n, l) for n, l in Doc(text).sections.get("Spend", []) if l.strip())
+        flagged = set()
+        for number, segment in candidates:
+            # The source must sit in the figure's own sentence: "about $330. Subagents: 36 starts recorded" names none.
+            sentences = re.split(r"(?<=[.;])\s+(?=[A-Z(])", segment)
+            if number not in flagged and any(DOLLAR_FIGURE_RE.search(s) and not SPEND_SOURCE_RE.search(s) for s in sentences):
+                flagged.add(number)
+                f.warn("{} line {}".format(name, number), SPEND_MESSAGE)
 
 
 def check_secrets(ctx, f):
@@ -2759,6 +2880,86 @@ def maker_spawn_counts(root, goal):
     return (int(match.group(1)) if match else None), makers, len(spawns) - makers
 
 
+REVIEWED_PHASES = ("spec", "design", "test-plan")
+FRESH_REVIEW_EXIT_RE = re.compile(r"(?i)\bfresh\b[^·]{0,80}\breview")
+REVIEW_NAME_RE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})-(?P<stem>[a-z0-9][a-z0-9\-]*?)-review-(?:r|round-)(?P<n>\d+)\.(?P<ext>md|json)$")
+REVIEW_VERDICTS = ("ready", "not ready")
+REVIEW_HEAD_LINES = 12
+
+
+def review_required(ctx, phase, big):
+    """Why this gate needs a review file, or None: the classification review at M and above, the spec, design, and
+    test-plan reviews at every size above XS, and any phase whose plan line names checker: architect or a fresh review."""
+    if phase == "intake" and big:
+        return "the classification review runs at M and above"
+    if phase in REVIEWED_PHASES:
+        return "every {} is reviewed by a fresh agent".format(phase)
+    for _, line in (ctx.goal.plan if ctx.goal else []):
+        match = PLAN_RE.match(line)
+        if not match or match.group("phase") != phase:
+            continue
+        if match.group("checker").split(":")[-1] == "architect":
+            return "its plan line names checker: architect"
+        if FRESH_REVIEW_EXIT_RE.search(match.group("exit")):
+            return "its plan line's exit names a fresh review"
+    return None
+
+
+def review_head_problem(path):
+    """Why a review file does not open with its verdict and round (None when it does): `verdict: ready` or `verdict: not
+    ready` and `round: <n>/<bound>` within its first lines, or as top-level fields of a JSON review."""
+    match = REVIEW_NAME_RE.match(path.name)
+    text = read_text(path)
+    if text is None:
+        return "cannot be read"
+    if match.group("ext") == "json":
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return "is not valid JSON"
+        fields = data if isinstance(data, dict) else {}
+        verdict_value, round_value = str(fields.get("verdict", "")).strip(), str(fields.get("round", "")).strip()
+    else:
+        head = Doc("\n".join(text.splitlines()[:REVIEW_HEAD_LINES])).fields()
+        verdict_value, round_value = head.get("verdict", ""), head.get("round", "")
+    if verdict_value.lower() not in REVIEW_VERDICTS:
+        return "does not open with 'verdict: ready' or 'verdict: not ready' in its first {} lines".format(REVIEW_HEAD_LINES)
+    bounds = re.match(r"^(\d+)\s*/\s*(\d+)$", round_value)
+    if not bounds:
+        return "does not open with 'round: <n>/<bound>' in its first {} lines".format(REVIEW_HEAD_LINES)
+    number, bound = int(bounds.group(1)), int(bounds.group(2))
+    if number < 1 or number > bound:
+        return "says round {}, outside its bound of {}".format(number, bound)
+    if number != int(match.group("n")):
+        return "says round {} but its name says r{}".format(number, match.group("n"))
+    return None
+
+
+def check_review_files(ctx, f, phase, big, sub=None):
+    """Every review round leaves a file an auditor can read: .drive/reviews/<date>-<phase>-review-r<n>.md (or .json),
+    with a sub-goal slug after the phase when the gate is scoped to one."""
+    why = review_required(ctx, phase, big)
+    if not why:
+        return
+    subs = {sub} if sub else {n.split("·", 1)[1].strip() for n, _ in (ctx.goal.classifications if ctx.goal else []) if "·" in n}
+    stems = {phase} | {"{}-{}".format(phase, s) for s in subs if s}
+    folder = ctx.drive / "reviews"
+    found = []
+    for path in sorted(folder.iterdir()) if folder.is_dir() else []:
+        match = REVIEW_NAME_RE.match(path.name)
+        if match and match.group("stem") in stems and parse_date(match.group("date")) and path.is_file():
+            found.append(path)
+    if not found:
+        f.fail(".drive/reviews", "holds no review for the {} gate ({}). Every review round leaves "
+               ".drive/reviews/<date>-{}-review-r<n>.md from templates/review.md, whose first lines hold 'verdict: ready' "
+               "or 'verdict: not ready' and 'round: <n>/<bound>'.".format(phase, why, phase))
+        return
+    for path in found:
+        problem = review_head_problem(path)
+        if problem:
+            f.fail(ctx.rel(path), "{}. A review file opens with its verdict and round (templates/review.md).".format(problem))
+
+
 def check_gate(ctx, f, phase, sub=None):
     size = ctx.goal.size if ctx.goal else None
     if sub:
@@ -2769,6 +2970,7 @@ def check_gate(ctx, f, phase, sub=None):
             size = cls.get("size")
     big = size in ("M", "L", "XL")
     spawn_budget_check(ctx, f)
+    check_review_files(ctx, f, phase, big, sub)
     if phase == "intake":
         if big and not (ctx.drive / "capabilities.json").exists():
             f.fail("capabilities.json", "is missing. Run drive.py capabilities at intake for M and above.")
@@ -2974,6 +3176,8 @@ def final_audit_problems(ctx):
     provenance = ctx.provenance(path, "final-audit")
     if provenance:
         problems.append(provenance)
+    elif data.get("verdict") == "pass":
+        problems.extend(reaudit_problems(ctx, path, data, audits))
     latest = latest_code_commit(ctx)
     if latest:
         audit_commit = git_out(ctx.root, "log", "-1", "--format=%H", "--", str(path.relative_to(ctx.root)))
@@ -2983,6 +3187,86 @@ def final_audit_problems(ctx):
         elif path.stat().st_mtime < latest[1]:
             problems.append("{} predates the latest code commit {}".format(ctx.rel(path), latest[0][:7]))
     return problems
+
+
+def git_blob_sha256s(root, rel):
+    """{sha256 of the file's bytes: those bytes} for every version of `rel` committed on HEAD's history."""
+    code, out, _ = git(root, "log", "--format=%H", "--", rel)
+    versions = {}
+    for commit in (out.split() if code == 0 else [])[:50]:
+        try:
+            data = subprocess.run(["git", "-C", str(root), "show", "{}:{}".format(commit, rel)], capture_output=True,
+                                  timeout=30).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if data:
+            versions.setdefault(hashlib.sha256(data).hexdigest(), data)
+    return versions
+
+
+def recorded_audit_verdict(ctx, entry, versions):
+    """The verdict of the final-audit bytes a ledger entry recorded, recovered from the file on disk, a committed
+    version, or the writing agent's Write call in its transcript; None when none of them holds those bytes."""
+    rel, digest = entry.get("path"), entry.get("sha256")
+    data = versions.get(digest)
+    if data is None and file_sha256(ctx.root / rel) == digest:
+        data = (ctx.root / rel).read_bytes()
+    if data is None and entry.get("transcript"):
+        for name, tool_input, cwd in transcript_tool_calls(entry.get("transcript"), entry.get("agent_id")):
+            content = tool_input.get("content")
+            if name == "Write" and isinstance(content, str) and call_writes_path(name, tool_input, cwd, ctx.root, rel) \
+                    and hashlib.sha256(content.encode("utf-8")).hexdigest() == digest:
+                data = content.encode("utf-8")
+                break
+    if data is None:
+        return None
+    try:
+        parsed = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return str(parsed.get("verdict")) if isinstance(parsed, dict) else None
+
+
+def reaudit_problems(ctx, path, data, audits):
+    """A re-audit after a no-go is done by a fresh agent (references/verification.md section 13). The ledger records
+    each final-audit write with its sha256 and agent_id; the go is the latest entry for the current bytes, and the
+    no-go before it is the latest earlier entry, for any final-audit file, whose recorded bytes say anything but pass.
+    When those bytes cannot be recovered, a go that says round 2 or later whose every earlier recorded write of the file
+    came from its own agent is refused too, since no other agent can have written round 1."""
+    rels = {ctx.rel(p) for p in audits}
+    rel = ctx.rel(path)
+    digest = file_sha256(path)
+    writes = [e for e in ctx.evidence_entries() if e.get("path") in rels and e.get("role") in EVIDENCE_ROLES["final-audit"]]
+    go = [e for e in writes if e.get("path") == rel and e.get("sha256") == digest]
+    if not go:
+        return []
+    go = go[-1]
+    go_ts, go_agent = float(go.get("ts") or 0), str(go.get("agent_id"))
+    earlier = [e for e in writes if float(e.get("ts") or 0) < go_ts and not (e.get("path") == rel and e.get("sha256") == digest)]
+    versions = {}
+    unknown = []
+    for entry in reversed(earlier):
+        if entry.get("path") not in versions:
+            versions[entry.get("path")] = git_blob_sha256s(ctx.root, entry.get("path"))
+        verdict_value = recorded_audit_verdict(ctx, entry, versions[entry.get("path")])
+        if verdict_value is None:
+            unknown.append(entry)
+            continue
+        if verdict_value == "pass":
+            continue
+        if str(entry.get("agent_id")) == go_agent:
+            return ["{} is a go written by {} {}, the same agent instance that wrote the earlier no-go ({} verdict {}). "
+                    "A re-audit is done by a fresh agent: spawn a new {} with the Agent tool, never a resumed one".format(
+                        rel, go.get("agent_type"), go_agent, entry.get("path"), verdict_value, go.get("agent_type"))]
+        return []
+    same_file = [e for e in unknown if e.get("path") == rel]
+    round_number = data.get("round")
+    if isinstance(round_number, int) and round_number >= 2 and same_file \
+            and all(str(e.get("agent_id")) == go_agent for e in same_file):
+        return ["{} says round {}, and every recorded write of it came from {} {}, so the agent that passed it also wrote "
+                "the round before. A re-audit is done by a fresh agent: spawn a new {} with the Agent tool".format(
+                    rel, round_number, go.get("agent_type"), go_agent, go.get("agent_type"))]
+    return []
 
 
 def row_has_reason(ctx, row):
@@ -3183,6 +3467,7 @@ def run_lint(root, mode="base", gate=None, run_commands=True, sub=None, suite_ti
     check_handoffs(ctx, f)
     check_packages(ctx, f)
     check_constraints(ctx, f)
+    check_spend(ctx, f)
     check_secrets(ctx, f)
     check_placeholders(ctx, f)
     check_frozen(ctx, f)
@@ -3348,15 +3633,15 @@ def goal_text_of(goal):
 
 def same_goal(old_goal, new_text, new_slug):
     """A resume when the goal text GOAL.md recorded at init matches the new goal, ignoring case and runs of whitespace.
-    The slug is cut at 50 characters, so two goals sharing their opening would match on it; it decides only for an older
-    GOAL.md that records no goal text."""
+    Two goals can share a slug, so the slug decides only for an older GOAL.md that records no goal text; such a file may
+    carry the slug init used to cut from the goal text at 50 characters, which still matches."""
     if old_goal is None:
         return True
     old_text = goal_text_of(old_goal)
     norm = lambda s: re.sub(r"\s+", " ", s).strip().lower()  # noqa: E731
     if norm(old_text) not in ("", "<verbatim prompt>"):
         return norm(old_text) == norm(new_text)
-    return old_goal.slug == new_slug
+    return old_goal.slug in (new_slug, slugify(new_text, 50))
 
 
 def archive_run(root, old_goal):
@@ -3427,7 +3712,7 @@ def cmd_init(args):
     if error or not goal_text:
         print("drive init: {}.".format(error or "the goal is empty"), file=sys.stderr)
         return 2
-    slug = args.slug or slugify(goal_text, 50) or "goal"
+    slug = args.slug or derive_slug(goal_text) or "goal"
     if not SLUG_RE.match(slug):
         print("drive init: --slug must be lowercase words joined by hyphens.", file=sys.stderr)
         return 1

@@ -24,6 +24,7 @@ Local Proof, append the sections from templates/postmortem.md. -->
 - Reproduction: <command or test path, and deterministic or n of m runs>
 
 ## Investigate
+- Shared premise: <!-- the one assumption every earlier fix or workaround for this failure made, and the observation that tests it; none when no fix was tried -->
 - Candidate causes, each with the observation that separates it from the others:
   1. <candidate cause> · separated by: <observation>
   2. <candidate cause> · separated by: <observation>

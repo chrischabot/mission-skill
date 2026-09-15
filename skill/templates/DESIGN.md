@@ -3,7 +3,7 @@ reconciled at: <short sha>
 spec: .drive/SPEC.md@<short sha>
 capability map: .drive/capability-map.md | one capability; no map
 design contract: design/DESIGN.md | not applicable because <no ui trait>
-latest review: .drive/reviews/<date>-design-<slug>.json, or .md from drive:architect · verdict: <pass | pass-with-changes | block>
+latest review: .drive/reviews/<date>-design-<slug>.json, or <date>-design-review-r<n>.md from drive:architect · verdict: <pass | pass-with-changes | block>
 
 <!-- Write every section in order. When a section does not apply, write
 "Not applicable because <reason>." Never delete a heading. Restate nothing that SPEC.md

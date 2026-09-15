@@ -7,8 +7,8 @@ max_turns: 80
 timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
-  Evaluation harness note, not from the user: this run is scored on the failing test named in
-  .drive/STATE.md. End the run once its outcome is committed. Do not start later phases.
+  End the run once the outcome of the red check named in .drive/STATE.md is committed. Do not
+  start later phases.
 ---
 
 /drive --resume

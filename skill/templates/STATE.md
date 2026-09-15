@@ -8,7 +8,11 @@ session: <session id>
 model: <model · effort actually running>
 
 <!-- Volatile working memory, rewritten (not appended) at every phase gate and before every stop;
-150 lines at most. status is running, verifying, blocked, stalled, done, stopped, or aborted. The
+150 lines at most. updated comes from `date -u +%Y-%m-%dT%H:%M:%SZ` run at the rewrite, never from
+memory. phase names the earliest plan line in GOAL.md not yet ticked, even when later work has
+started; the rest of what is under way goes in next and In flight. A spend figure anywhere in this
+file comes from a recorded total with its source (a headless result's total_cost_usd, /usage, or the
+harness budget line), or says "not measured". status is running, verifying, blocked, stalled, done, stopped, or aborted. The
 Stop gate lets a turn end only when: status is done or stopped and lint --final passes; status is
 blocked, Blocked on begins with one of budget:, impossible:, destructive:, credentials:, payment:,
 legal:, account:, two-diagnoses:, or soak: followed by the condition in words, and REPORT.md says

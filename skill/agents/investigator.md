@@ -52,8 +52,10 @@ following `references/shapes/fix.md` for a bug.
    the input until removing any element makes the failure vanish, diff a working environment. Tag
    instrumentation `HUNT-<slug>`, and after adding it confirm the failure still occurs at about the
    same rate.
-4. **Investigate.** Write three to five candidate causes across layers (data, logic, timing,
-   configuration, dependency or platform, stale build), each with the observation that separates it.
+4. **Investigate.** When earlier fixes or workarounds for this failure failed, first write the
+   premise they all shared and the observation that tests it. Write three to five candidate causes
+   across layers (data, logic, timing, configuration, dependency or platform, stale build), each with
+   the observation that separates it.
    Write each prediction and what you expect if it is false before its experiment, change one variable
    at a time, and record the result. Keep refuted rows with their evidence. Read dependency source or
    probe the platform instead of guessing.

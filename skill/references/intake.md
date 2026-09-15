@@ -43,8 +43,10 @@ the directory is unrelated after all, go back to that step. Then, before you par
 
 Run `drive.py init --size <size> --goal -` with the goal verbatim on stdin through a quoted heredoc
 (`<<'GOAL'`), so quotes, `$`, and backticks in the goal cannot break the command. `--goal-file <path>`
-reads the goal from a file instead, with the same safety; `--slug <slug>` replaces the slug it would
-derive from the goal; and `--root <dir>` acts on a project directory other than the current one,
+reads the goal from a file instead, with the same safety; `--slug <slug>` names the deliverable in one
+to three lowercase hyphenated words (`linkkeeper`, `invoice-csv-export`), never the goal sentence cut
+short, and every run passes it, because the slug names the intake commit, the report, and any paused
+run (without it, `init` derives a short noun slug from the goal); and `--root <dir>` acts on a project directory other than the current one,
 a flag `start`, `lint`, `end`, `preflight`, `freeze`, `guard`, `capabilities`, `visibility`, and
 `worktree-land` also take. It moves the old
 run's tracked files to `.drive/runs/<date>-<slug>/` with a RESTORE.md, parks its local files under
@@ -353,10 +355,10 @@ the nearest earlier phase it does run (a `fix` has no `design`, so a `data` roll
 ### large-surface
 
 - **Signals.** The same change across about twenty files or more, counted by the probe (`grep -rl '<pattern>' <src> | wc -l`), never guessed.
-- **Gate.** Fan out in waves of at most eight makers with a verifier per package, following `references/parallel.md`.
+- **Gate.** Fan out in waves of at most eight makers, verified per wave at M and per package at L and XL (`references/verification.md` section 2), following `references/parallel.md`.
 - **Phase.** `decompose`; `build`.
 - **Artifact.** `.drive/packages/<id>/brief.md` and `report.json`.
-- **Exit check.** Every package has a passing verdict, and `git worktree list` prints one line after each wave.
+- **Exit check.** Every package's claims have a passing verdict, and `git worktree list` prints one line after each wave.
 
 ### generated-code
 
@@ -408,9 +410,9 @@ is M by component count, with `large-surface`. A one-module refactor that could 
 | Size | Files created | Agents and verification | Final review | Live proof | Starting budget |
 |---|---|---|---|---|---|
 | XS | none; the commit body records claim and evidence | none except trait gates; one refutation test seen red then green, except for an edit with no runtime behaviour (docs, comments, copy, a typo), whose evidence is the diff plus whatever check applies (a render, link check, spell check, or the build), named in the commit body, with no failing test first; the project's checks; the run becomes S when a second non-test source file changes, a workaround is needed, or the test cannot be made to fail first | none | only when a trait gate demands it | minutes |
-| S | GOAL.md, STATE.md, STATUS.md with one to three rows, plus the shape's ledger (HUNT.md for fix, RESEARCH.md with a `## Brief` section for report), a SPEC.md under 300 words for a feature or build, and TESTPLAN.md with its kindness ledger once a test double is on a claim's path | one independent verifier; a severe test per claim by `drive:severe-tester`, which Local Proof requires (for a fix, on an adjacent input) | `drive:auditor` for build, move, every `fix/incident`, or a feature with five or more claims; otherwise a fresh `drive:verifier` with the checklist in `references/definition-of-done.md` section 6; never the grader | for `live` y rows when a deploy target exists; otherwise the target and reason are written | 15 turns, 8 subagents, 30 minutes |
-| M | everything the shape and traits call for: SPEC.md or the shape's spec file, TESTPLAN.md, DECISIONS.md, CONSTRAINTS.md from measured values (at archaeology, or after wave 0 for a greenfield build) | a fresh `drive:architect` review of the classification before the intake commit; verifier per package, conformance grader, severe review scaled to the diff | as S | required when a deploy target exists | 40 turns, 40 subagents, 3 hours |
-| L | adds RESEARCH.md, DESIGN.md, LESSONS.md | adds research lanes, spec, design, and test strategy review by `drive:auditor`, and for build a walking skeleton proven live at the end of wave 0 | `drive:auditor`, for every shape | a requirement for every `live` y row | 100 turns, 90 subagents, 12 hours |
+| S | GOAL.md, STATE.md, STATUS.md with one to three rows, plus the shape's ledger (HUNT.md for fix, RESEARCH.md with a `## Brief` section for report), a SPEC.md under 300 words for a feature or build, and TESTPLAN.md with its kindness ledger once a test double is on a claim's path | one independent verifier; a severe test per claim by `drive:severe-tester`, which Local Proof requires (for a fix, on an adjacent input); planning reviews at one full round plus at most one scoped re-check of its blocking findings, the spec folded into one combined review of design and test plan | `drive:auditor` for build, move, every `fix/incident`, or a feature with five or more claims; otherwise a fresh `drive:verifier` with the checklist in `references/definition-of-done.md` section 6; never the grader | for `live` y rows when a deploy target exists; otherwise the target and reason are written | 15 turns, 8 subagents, 30 minutes |
+| M | everything the shape and traits call for: SPEC.md or the shape's spec file, TESTPLAN.md, DECISIONS.md, CONSTRAINTS.md from measured values (at archaeology, or after wave 0 for a greenfield build) | a fresh `drive:architect` review of the classification before the intake commit; a spec review, then one combined review of design and test plan, each one full round plus at most one scoped re-check; a verifier per wave, and per package for a package carrying an auth, money, or data-loss claim; conformance grader; a severe test per claim, with severe review scaled to the diff | as S | required when a deploy target exists | 40 turns, 40 subagents, 3 hours |
+| L | adds RESEARCH.md, DESIGN.md, LESSONS.md | adds research lanes, separate spec, design, and test strategy reviews by `drive:auditor` of up to three full rounds each, a verifier per package, and for build a walking skeleton proven live at the end of wave 0 | `drive:auditor`, for every shape | a requirement for every `live` y row | 100 turns, 90 subagents, 12 hours |
 | XL | as L | adds phase gates with a re-classification review by `drive:auditor`, workflow fan-out for bulk, and per-phase bounds | as L | required per surface | 250 turns, 200 subagents, several days |
 
 Budgets are starting envelopes in turns, subagents, and wall clock; the dollar envelope comes from
@@ -441,9 +443,12 @@ overrun with a `Narrows:` line naming what was cut.
 7. Write the budget line.
 8. At M and above, spawn a fresh `drive:architect` in review mode with the goal verbatim, the probe
    output, and the draft GOAL.md, asking whether shape, variant, size trigger, and traits follow from
-   this file. Apply its blocking findings before the commit, because every later phase inherits the
-   classification.
-9. Commit before any other work:
+   this file. It writes `.drive/reviews/<date>-intake-review-r1.md` from `templates/review.md`, with
+   `verdict:` and `round: 1/1` first (`references/verification.md` section 6). Apply its blocking
+   findings before the commit, because every later phase inherits the classification.
+9. Commit before any other work, once the review has returned and no agent is running, which is the
+   one moment staging the whole directory is safe; every later commit stages paths by name
+   (`references/state-files.md` section 10):
    `git add .drive .gitignore && git commit -m "drive(intake): <goal slug>"`. The lint and the final
    audit find this commit with `git log --grep '^drive(intake): <goal slug>$' --format=%h -1`, never
    by the first commit that added GOAL.md.
@@ -504,13 +509,13 @@ reclassifications: []
 ```
 
 ## Plan
-- [ ] intake · artifact: .drive/GOAL.md · exit: a fresh architect's classification review has no blocking finding; committed as drive(intake) · checker: orchestrator
+- [ ] intake · artifact: .drive/GOAL.md · exit: a fresh architect's classification review in .drive/reviews/2026-09-14-intake-review-r1.md has no blocking finding; committed as drive(intake) · checker: orchestrator
 - [ ] archaeology · artifact: .drive/how-it-works.md · exit: baseline of npm run test:ci at 3c9d2e1 recorded; export consumers listed; auth suspicion confirmed or refuted · checker: orchestrator
-- [ ] spec · artifact: .drive/SPEC.md · exit: every claim refutable and in STATUS.md with live fixed; PDF export listed under must not change · checker: architect
-- [ ] design · artifact: design/ extended; .drive/DESIGN.md contract for the export endpoint · exit: a fresh architect's review has no blocking finding · checker: architect
-- [ ] test-plan · artifact: .drive/TESTPLAN.md · exit: one refutation test per claim at an honest layer; kindness ledger covers the test database · checker: architect
-- [ ] build · artifact: code and tests · exit: gates green; per-package verdicts pass · checker: verifier
-- [ ] verify · artifact: .drive/proofs/<key>/r<n>/verdict.json · exit: every row at Local Proof; [ui] rows have shot: from ui-reviewer · checker: verifier
+- [ ] spec · artifact: .drive/SPEC.md · exit: every claim refutable and in STATUS.md with live fixed; PDF export listed under must not change; the spec review, one round and at most one scoped re-check, leaves no open blocking finding · checker: architect
+- [ ] design · artifact: design/ extended; .drive/DESIGN.md contract for the export endpoint · exit: reviewed together with the test plan below, one round and at most one scoped re-check, with no open blocking finding · checker: architect
+- [ ] test-plan · artifact: .drive/TESTPLAN.md · exit: one refutation test per claim at an honest layer; kindness ledger covers the test database; the combined review wrote this file's own test-plan review file · checker: architect
+- [ ] build · artifact: code and tests · exit: gates green; each wave's verdict passes, with the export access check verified alone if auth is confirmed · checker: verifier
+- [ ] verify · artifact: .drive/proofs/wave-1/r<n>/verdict.json · exit: every row at Local Proof; [ui] rows have shot: from ui-reviewer · checker: verifier
 - [ ] live-proof · artifact: live.md per live y row · exit: a CSV downloaded from staging matches the list totals · checker: verifier
 - [ ] harden · artifact: .drive/reviews/ · exit: severe tests and, if auth confirmed, security review with dispositions · checker: security-reviewer
 - [ ] docs · artifact: docs/admin/invoices.md · exit: export described where finance looks · checker: orchestrator
@@ -650,7 +655,7 @@ route, a query, screens) and two unknowns (the charting approach and who may see
 `existing-code`, `ui`. Suspected: `api`, confirmed when the page fetches its data from a new endpoint rather than rendering it on the server; `data`, refuted when there is no schema change and tests
 run on the real engine; `auth`, confirmed if the dashboard needs new role checks. The plan is
 archaeology with a green baseline, a change spec, a design delta that reuses the component library,
-a test plan, build with a verifier per package, UI review at desktop and phone widths, live proof on
+a test plan, build with a verifier per wave (a package carrying new role checks verified alone), UI review at desktop and phone widths, live proof on
 staging when it exists, scaled harden, and a docs delta. Recorded assumptions: reads existing
 metrics and needs no ingestion; visibility matches the existing admin pages. Watch for a new
 aggregation table (confirms `data`) and a new role (confirms `auth`).

@@ -34,7 +34,7 @@ class InitEndTests(DriveTestCase):
         self.assertIn("!.drive/proofs/*/r*/shots/**/*.review.png", ignore)
         goal = (repo / ".drive/GOAL.md").read_text()
         self.assertIn('goal: "Add CSV export to invoices"', goal)
-        self.assertIn("# GOAL · add-csv-export-to-invoices", goal)
+        self.assertIn("# GOAL · csv-export", goal)
         self.assertIn("status: running", (repo / ".drive/STATE.md").read_text())
 
     def test_init_refuses_xs(self):
@@ -79,11 +79,11 @@ class InitEndTests(DriveTestCase):
         self.assertTrue((archive / "STATUS.md").is_file())
         self.assertTrue((archive / "RESTORE.md").is_file())
         self.assertTrue((repo / ".drive/local/archive/{}-session-auth/active".format(TODAY)).is_file())
-        self.assertIn("add-an-audit-log", (repo / ".drive/GOAL.md").read_text())
+        self.assertIn("# GOAL · audit-log", (repo / ".drive/GOAL.md").read_text())
         decisions = (repo / ".drive/DECISIONS.md").read_text()
         self.assertIn("Pause the unfinished run for a different goal", decisions)
         self.assertIn(".drive/runs/{}-session-auth".format(TODAY), decisions)
-        self.assertIn("add-an-audit-log", (repo / ".drive/local/active").read_text())
+        self.assertIn('"slug": "audit-log"', (repo / ".drive/local/active").read_text())
 
     def test_end_refuses_unfinished_run(self):
         repo = self.make_run()

@@ -37,7 +37,9 @@ directory. Run commands as `cd <root> && <command>`. Read the matching procedure
 - **SPEC.md** from `templates/SPEC.md`, or `templates/change-spec.md` for a feature: each requirement
   is a short claim that could be false, written as a heading whose slug is its STATUS key, with a "What
   would prove this wrong" scenario and its oracle; then assumptions with reversal cost and an
-  out-of-scope list. A size-S feature or build gets a SPEC.md under 300 words. Word each claim
+  out-of-scope list. In a change spec, add under Blast radius a `Safe because:` line naming the one
+  fact the change is safe because of, with the test or command that proves it, or `unproven`. A
+  size-S feature or build gets a SPEC.md under 300 words. Word each claim
   concretely for this product; a superlative gives no test anything to check.
 - **DESIGN.md** from `templates/DESIGN.md`: specify the contract (types, endpoints, schemas, events)
   in section 4 as the seam between packages, then data model, failure semantics, idempotency, cost,
@@ -78,13 +80,18 @@ precondition and the observable wrong outcome that would show it.
   Check that every claim is refutable and traced to a test row, that scope matches the goal without
   quiet narrowing, and name an implementation that passes every scenario and still fails the user. For
   a design, run a pre-mortem: assume it failed in six months, name three causes, and mark each
-  mitigated, accepted, or untested. Write the spec review to
-  `.drive/reviews/<date>-spec-review-round-<n>.md` in the format of `references/spec.md`, or the design
-  review to `.drive/reviews/<date>-design-<slug>.md`, holding the JSON of `references/design.md`
-  inside a `json` fence, because the guard refuses you a JSON file under `.drive/reviews/`.
+  mitigated, accepted, or untested. Write each round, a scoped re-check included, to
+  `.drive/reviews/<date>-<phase>-review-r<n>.md` from `templates/review.md`, with `verdict:` and
+  `round: <n>/<bound>` first. The spec review adds the cheat attempts table from `references/spec.md`;
+  the design review holds the JSON of `references/design.md` inside a `json` fence in its Notes, because
+  the guard refuses you a JSON file under `.drive/reviews/`. A combined design and test-plan review
+  writes one file for each artifact. On a scoped re-check, read only the previous round's file, the
+  artifact's diff since that round, and the sections its blocking findings name, and answer each of
+  those findings `closed` or `open` with evidence.
 - **Test plan**: judge whether each row sits at the cheapest layer whose real runtime can refute its
   claim, whether each claim at M and above has a frozen test outside every package's ownership, and
-  whether each kindness ledger answer holds against production.
+  whether each kindness ledger answer holds against production. Write it to
+  `.drive/reviews/<date>-test-plan-review-r<n>.md` the same way.
 
 Edit nothing except the review file.
 

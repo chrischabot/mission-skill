@@ -69,8 +69,8 @@ RESEARCH.md for a report). M and above creates everything the shape and traits c
 | `handoffs/<unit>.md` | verifier handoffs from `templates/handoff.md`; `<unit>` is a STATUS key or a package id, and a later round's handoff may be `<unit>-r<n>.md`, with n the first number of its `round:` field, so earlier rounds' handoffs stay | every verification round |
 | `rubrics/<shape>.md`, `rubrics/ui.md` | the frozen rubric; the UI rubric, built from `references/ui-verification.md` section 11 | every verification round; `ui` |
 | `packages/index.md`, `packages/<id>/brief.md`, `report.json` | the wave table; parallel work packages | runs that decompose |
-| `proofs/<key>/proof.json`, `r<n>/` | manifest; per round `verdict.json`, `commands.log`, output, `shots/`, `live.md`, `findings.json`; a package verdict uses the package id as its key | every claim that reaches Local Proof |
-| `reviews/` | review verdicts (`<date>-<slug>.md` or `.json`), the final audit `<date>-final-audit.json`, citation checks `<date>-citations-<slug>.json`, disputes `<date>-dispute-<key>.md`, and the retro `<date>-retro.md` | every review, dispute, and retro |
+| `proofs/<key>/proof.json`, `r<n>/` | manifest; per round `verdict.json`, `commands.log`, output, `shots/`, `live.md`, `findings.json`; a package verdict uses the package id as its key, and a wave verdict the wave id, `wave-<n>` | every claim that reaches Local Proof |
+| `reviews/` | review verdicts (`<date>-<slug>.md` or `.json`), one file per classification, spec, design, and test-plan review round `<date>-<phase>-review-r<n>.md` from `templates/review.md` opening with `verdict:` and `round: <n>/<bound>` (a combined review writes one such file per artifact it covers), the final audit `<date>-final-audit.json`, citation checks `<date>-citations-<slug>.json`, disputes `<date>-dispute-<key>.md`, and the retro `<date>-retro.md` | every review, dispute, and retro |
 | `investigations/<date>-<slug>.md`, `.patch` | failure records; a test or fix an investigator saved as a patch | every failure event |
 | `runs/<date>-<slug>/` | a paused run for a different goal, with its RESTORE.md | section 14 |
 
@@ -163,7 +163,7 @@ Every file has exactly one writer at a time, so there is never a concurrent edit
 | `investigations/` | `drive:investigator` for the record it was given |
 | `packages/<id>/report.json`, `local/workers/<name>/report.md` | the maker of that package |
 | `proofs/<key>/r<n>/` | the agent working that round, through Bash: the verifier writes its command output and its own `verdict.json`, the severe tester and ui-reviewer their files; `proof.json` names `verifier` or `ui-reviewer` as `produced_by`, never the orchestrator. The orchestrator reads a verdict and never writes or edits one: the guard refuses the main thread, and any subagent outside drive's roster, every JSON file under `.drive/proofs/` and `.drive/reviews/`, any `verdict.json` or `proof.json` under `.drive/`, anything under `.drive/local/ro/`, and the ledger, and refuses them deleting or moving anything under `.drive/proofs/`, `.drive/reviews/`, or `.drive/local/ro/`; the lint accepts only files whose hash the ledger recorded from a reviewer of the right type whose transcript shows the write |
-| `reviews/` | the agent whose brief names the file: the auditor, the security reviewer (no file at XS), the grader, a fresh verifier running a final-audit checklist or close check, or a ui-reviewer running a close check; the final audit and citation checks are bound to the ledger like verdicts; the orchestrator writes only Markdown there: dispute files, dispositions, re-grade comparisons, panel results, and the retro |
+| `reviews/` | the agent whose brief names the file: the architect or auditor reviewing the classification or a planning artifact (one file per round), the auditor, the security reviewer (no file at XS), the grader, a fresh verifier running a final-audit checklist or close check, or a ui-reviewer running a close check; the final audit and citation checks are bound to the ledger like verdicts; the orchestrator writes only Markdown there: dispute files, dispositions, re-grade comparisons, panel results, and the retro |
 
 The lint counts each kind of evidence only from these agent types: a verdict from `drive:verifier`
 or `drive:ui-reviewer`; a final audit from `drive:auditor` or `drive:verifier`; a live proof from
@@ -295,6 +295,12 @@ In flight: none | <agent> → <unit> (report at .drive/local/workers/<name>/repo
 - <ISO> · <step> · <classifier category or tool refusal> · <action taken> · <result>
 ```
 
+Write `updated:` from `date -u +%Y-%m-%dT%H:%M:%SZ`, run at the moment of the rewrite, never from
+memory or an estimate: the lint fails a value more than 15 minutes ahead of the clock, and one behind
+it defeats the staleness check. `phase:` names the earliest plan line in GOAL.md not yet ticked, even
+when later work has already started, so that overlapping phases never make it lag or move backwards;
+what else is under way goes in `next:` and "In flight".
+
 `status` is one of `running`, `verifying`, `blocked`, `stalled`, `done`, `stopped`, `aborted`.
 `running` and `verifying` keep the Stop gate closed, and no other status opens it by being declared:
 `done` and `stopped` need `lint --final` to pass; `blocked` needs the Blocked on line to begin with
@@ -389,6 +395,7 @@ finding and exits 1 on any failure. Fix what it reports; never edit a file to hi
 | Frozen tests | at every lint, when `.drive/frozen.txt` or `.drive/frozen.sha256` exists, every problem `drive.py freeze check` reports without `--base` (`references/testing.md` section 9) |
 | Constraints floor | at `--gate integrate`, `--gate harden`, and `--final`, `drive.py guard` against GOAL.md's `baseline_sha` (else HEAD); every violation, and a guard that could not run, is a failure |
 | Registry | when STATE.md names `registry:`, that command runs and must exit 0 at every `--gate` and at `--final` |
+| Review files | at `--gate intake` at M and above, at every `spec`, `design`, and `test-plan` gate, and at a gate whose plan line names `checker: architect` or a fresh review, a `.drive/reviews/<date>-<phase>-review-r<n>.md` (the sub-goal slug after the phase for a scoped gate) whose first lines hold `verdict: ready` or `verdict: not ready` and a `round: <n>/<bound>` matching its name; a final-audit go written by the agent instance that wrote the earlier no-go is refused |
 | `--gate <phase>` adds | that phase's exit criteria: for example `capabilities.json` at intake for M and above, `how-it-works.md` with a drift table at archaeology, a `test:`, `severe:`, or `planned:` token on every row at test-plan, disjoint ownership at decompose, every active row at Partial after build, fix, draft, or execute and at Local Proof after verify, harden, design-qa, and integrate, and live rows at Live Proof after live-proof, deploy, and cutover (a `why:device-only:` row at Local Proof); integrate also runs the `--stop` hygiene checks; `--sub <slug>` checks only the rows carrying `sub:<slug>` and takes the size from that sub-goal's classification |
 | GOAL.md budget | at every gate, the maker subagent starts (`drive:implementer`, `drive:writer`, `drive:designer`, `drive:architect`, `drive:researcher`) the ledger recorded since `init`, counted against the number before `subagents` on the budget line; reviewer starts are reported and never counted: a warning past the count, a failure past twice it until a DECISIONS.md entry that mentions the budget, an overrun, or the envelope carries a `Narrows:` line other than `none` naming what was cut |
 | DECISIONS.md | no entry present at HEAD removed or altered; Decision and Undo on every entry |
@@ -419,6 +426,15 @@ At every phase gate, in order: update the STATUS rows the phase touched, with ev
 STATE.md (`phase`, `next`, `updated`, `commit`, facts verified, failures opened or closed); append
 DECISIONS.md entries; run `drive.py lint --gate <phase>` and fix what it reports; commit naming the
 phase and the claim keys.
+
+**Stage by path.** Every commit names what it stages: a package commit its owned paths, its frozen
+tests, and its `report.json`; a gate commit the state files it changed and the review, handoff, and
+proof files the phase produced, each by path (`git add .drive/STATE.md .drive/STATUS.md
+.drive/reviews/<file>`). Never run `git add -A`, `git add .`, or `git add .drive` while a reviewer or
+maker is running, because a file another agent is still writing, or an uncommitted rewrite of a
+verdict, lands in an unrelated commit; the first complete run swept a verdict rewrite into a package
+commit that way. Read `git diff --cached --name-only` before each commit. The intake commit, made
+before any agent is running, is the one exception.
 
 Before ending any turn, `next` names the real next action, `updated` and `commit` are current,
 every in-flight agent is listed with its report path, and the tree is committed. If you stop for
@@ -539,8 +555,19 @@ locally, with the union of every `shim_differences` answer; what is not done and
 that would finish each; decisions with their undo, including every narrowing since intake; open
 failures with the command that would close each; lessons with commits, or "none" and why; commands
 to verify from a clean checkout; any paused run; spend. A stopped run's report opens with
-"Stopped because <reason>". Every statement cites a row, a file, or a proof. State nothing the lint would reject and describe no plan as a result. Mid-run, tell the
+"Stopped because <reason>". Open failures include every flake: a frozen or suite test that failed in
+any recorded run and passed on a rerun is listed with its failure and run counts, never left out
+because the last run was green. Spend is written after the final audit and the security review have
+returned, never before, because an earlier figure leaves out the most expensive verdicts; each cost
+figure comes from a recorded total, named with its source (a headless result's `total_cost_usd`,
+earlier legs' totals in `.drive/local/run.md`, `/usage`, or the harness budget line), or says "not
+measured". Every statement cites a row, a file, or a proof. State nothing the lint would reject and describe no plan as a result. Mid-run, tell the
 user one line per milestone: the phase that passed, the claims that moved, the evidence path.
+
+Write run output in whole sentences: the report, milestone lines, DECISIONS.md entries, and lesson
+entries keep their articles, verbs, and connectives, and never compress into fragments, arrows, or
+abbreviations a reader has to decode. The `DRIVE · VERIFY` block is the one exception, compressed by
+design.
 
 ## 16. Excuses and rebuttals
 
@@ -560,7 +587,11 @@ user one line per milestone: the phase that passed, the claims that moved, the e
 
 ## 17. Red flags
 
-- STATE.md `updated` is older than the last commit that touched code.
+- STATE.md `updated` is older than the last commit that touched code, or ahead of `date -u`.
+- STATE.md `phase` names a later phase while an earlier plan line is still unticked.
+- `git add -A`, `git add .`, or `git add .drive` run while a reviewer or maker was running.
+- A review round whose findings exist only in an agent's message or a STATE.md line.
+- A spend figure with no recorded source, or REPORT.md's spend written before the final audit.
 - A status word outside the ladder: implemented, drafted, wired, handled, in progress.
 - STATUS.md has fewer keys than at HEAD or at the intake commit.
 - A Verified fact lacks `Verified:`, or STATE.md passes 150 lines or narrates what happened.

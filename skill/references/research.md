@@ -267,16 +267,23 @@ source; README, CLAUDE.md, and docs are claims to check.
    records, manifests, lockfiles, CI workflows, and status files.
 2. Read the history: `git log --oneline -50`; `git log --since=90.days --stat | head -200`; churn with
    `git log --format= --name-only | sort | uniq -c | sort -rn | head -30`; `gh pr list --limit 20` and
-   `gh issue list --state open --limit 30` when `gh` is authenticated.
+   `gh issue list --state open --limit 30` when `gh` is authenticated. History is evidence of when
+   something changed, not of what its author intended: a date, a blame line, or a change that landed
+   beside an incident suggests a reason without stating one, and the code itself shows only mechanism.
+   Only a commit message, pull request, issue, or decision record that says why is evidence of intent.
+   When odd-looking code may be load-bearing and nothing states its reason, list the searches run under
+   "Could not verify" and treat the code as load-bearing.
 3. Map entry points; exact build, focused-test, full-suite, lint, and typecheck commands, preferring
    checked-in wrappers; test topology and what reaches real services; data stores and migrations;
    external integrations; configuration and secrets handling; the deployment path.
 4. Run the build and the full suite once and record the baseline exactly (pass and fail counts,
    duration, flaky tests). This is archaeology's probe and the later "did I break it" reference.
-5. Check every operational claim in the docs against code or a command, and write the drift table.
-6. Map the blast radius of the change area: every caller, consumer, job, and other repository that
+5. When the project has a runnable app, write the note's "Drive the app" recipe and prove it once by
+   running its launch, doctor, one feature, and cleanup.
+6. Check every operational claim in the docs against code or a command, and write the drift table.
+7. Map the blast radius of the change area: every caller, consumer, job, and other repository that
    depends on it, how each was found, and whether real tests cover it.
-7. Write down what could not be verified and why. Tag every statement with its evidence.
+8. Write down what could not be verified and why. Tag every statement with its evidence.
 
 Keep the note under 150 lines with the commit it was checked at. When later code contradicts it, the
 code wins and the note is corrected. Drift it proves in CLAUDE.md or docs is fixed as part of the task,

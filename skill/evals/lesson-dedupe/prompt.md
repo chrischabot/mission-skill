@@ -7,11 +7,11 @@ max_turns: 60
 timeout_seconds: 1500
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
-  Evaluation harness note, not from the user: the skill's own lessons store cannot be reached from
-  this sandbox. For this run, skill-lessons/general.md and skill-lessons/rejected.md in the
-  workspace stand in for references/lessons/general.md and references/lessons/rejected.md; read
-  and write lessons there and commit them in this repository. End the run once the retro step
-  named in .drive/STATE.md is committed.
+  The skill's own lessons store cannot be reached from this environment. For this run,
+  skill-lessons/general.md and skill-lessons/rejected.md in the workspace stand in for
+  references/lessons/general.md and references/lessons/rejected.md; read and write lessons there
+  and commit them in this repository. End the run once the retro step named in .drive/STATE.md is
+  committed.
 ---
 
 /drive --resume

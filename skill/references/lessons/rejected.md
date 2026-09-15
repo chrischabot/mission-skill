@@ -9,7 +9,7 @@ Entry shape:
 
 ```markdown
 ### <the candidate rule's heading, verbatim>
-- Rejected: <date> · Failing question: <the first of the eight auditor questions that failed>
+- Rejected: <date> · Failing question: <the first of the nine auditor questions that failed>
 - Reason: <one or two sentences from the auditor's verdict>
 - Would change the verdict: <the evidence that would answer the reason>
 - Source: <failure event type and date; no project names>

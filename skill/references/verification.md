@@ -56,7 +56,17 @@ never writes tests, so the tests it runs were not written to pass its check.
 Build `.drive/handoffs/<unit>.md` from `templates/handoff.md`, using files only, never any agent's
 message. `<unit>` is a STATUS key or a package id. A later round may name its handoff
 `.drive/handoffs/<unit>-r<n>.md`, with n the first number of its `round:` field, so earlier rounds'
-handoffs stay.
+handoffs stay. A wave handoff uses the wave id, `wave-<n>`, as its unit.
+
+**The unit of verification follows size.** At S one verifier covers the run's claims. At M a handoff
+covers one wave: every claim the wave's packages carry, integrated and committed, and when those
+claims cannot each get a refutation inside the budget row below, the wave is split into as few
+handoffs as fit. Per-package handoffs are the default at L and XL, and at any size for a package
+that carries an `auth`, money, or data-loss claim, which is verified alone even inside an M wave.
+Severe tests stay per claim at every size, so a wave verdict still needs a `severe:` test on each
+row it moves. A wave verdict is written under `.drive/proofs/wave-<n>/r<m>/verdict.json`, lists each
+claim key in `claims[]`, and every STATUS row it covers names that file in its `verdict:` token. The
+per-wave seams check in `references/parallel.md` section 8 folds into the wave handoff at M.
 
 | Field | Taken from |
 |---|---|
@@ -325,8 +335,9 @@ unit's diff exceeds about 800 changed lines, when a claim carries money or auth,
 
 ## 6. Loop control: refutation, convergence, disputes
 
-**Round bounds.** SKILL.md section 5 sets these bounds; this table, `references/parallel.md` section 4,
-and the shape files repeat them and must agree with it.
+**Round bounds.** These two tables are the source of truth for round bounds; SKILL.md sections 3 and
+5, `references/intake.md` section 9, `references/parallel.md` section 8, and the shape files repeat
+them and must agree with them.
 
 | Shape | Verification rounds |
 |---|---|
@@ -339,6 +350,36 @@ and the shape files repeat them and must agree with it.
 
 Within a round, the maker gets at most three gate-fix cycles. Gates still red after the third become a
 blocking gap with the failing output attached, and the round counts as failed.
+
+| Size | Planning reviews: classification, spec, design, test plan |
+|---|---|
+| S | the spec review folds into one combined review of design and test plan; each review gets one full round plus at most one scoped re-check |
+| M | the classification review, one round; the spec review, then one combined review of design and test plan, each one full round plus at most one scoped re-check |
+| L, XL | separate spec, design, and test-plan reviews by `drive:auditor`, each up to three full rounds |
+
+A scoped re-check is not a second full round. Its brief holds the previous round's review file, the
+artifact's diff since that round, and the sections each blocking finding names; the reviewer answers
+each named finding `closed` or `open` with evidence, and raises a new blocking finding only where the
+revision itself introduced it. It never re-reads the whole artifact. A blocking finding still blocks:
+at S and M one still open after the re-check, like one still open after round three at L and XL,
+becomes a proposed decision record holding both positions, the work proceeds on the reviewer's
+position, and the open finding goes into STATE.md's Open failures and the report. A fresh reviewer
+runs every round and every re-check.
+
+**Every review round leaves a file.** The classification review at intake and every spec, design,
+and test-plan review round, a scoped re-check included, writes
+`.drive/reviews/<date>-<phase>-review-r<n>.md` from `templates/review.md`, whose first lines after its heading
+are `verdict:` and `round: <n>/<bound>`, followed by its findings with severity, confidence, and location.
+`<phase>` is `intake`, `spec`, `design`, or `test-plan`, with a sub-goal slug after it for a round
+that reviews one sub-goal. A combined review writes one file for each artifact it covers
+(`design` and `test-plan`, and `spec` when it folds in at S), each holding that artifact's verdict and
+findings, because each phase gate looks for its own phase's file. A read-only reviewer writes it through a
+quoted heredoc from the repository root with the full path. `<bound>` is the phase's bound from the table above, not a
+number the reviewer chooses: 1 for the classification review, 2 for any other review at S and M (the
+full round and its scoped re-check), and 3 at L and XL. A re-check is round 2 of 2. The findings in an agent's message or a
+line in STATE.md are not a review; `drive.py lint --gate <phase>` fails a reviewed gate with no such
+file or with one whose first lines lack a `verdict:` and a `round:` matching its name, and the final
+audit reads them.
 
 **Refutation before a gap blocks.** A reviewer that is told to find problems finds some that are not
 there, and a maker that fixes a false finding adds real defects. So a blocking gap reaches a maker only
@@ -405,7 +446,9 @@ listed in REPORT.md, and never re-enter the loop. The maker receives the confirm
 - **The same class twice is a design problem.** When the same defect class is confirmed in two
   consecutive rounds, at any location in the unit, stop patching. Open an investigation of the
   mechanism that produces the class, with `drive:architect` reviewing the affected design section when
-  the mechanism is a design choice. The unit stays open until the investigation's fix lands.
+  the mechanism is a design choice. The unit stays open until the investigation's fix lands. The
+  three signs listed in `references/design.md` section 12 are this kind of mechanism showing itself
+  during the build, and are handled the same way.
 - **Late findings about the tests call for an instrument audit.** From round three, when more than half
   of the confirmed gaps are about the tests rather than the product (tests that pass for the wrong
   reason, mutants that survive, evidence that overstates what ran, a frozen test with a weak oracle),
@@ -483,8 +526,10 @@ Severity is set by who would notice: `blocking` when a user, an attacker, or the
 
 Never report a value that was not measured. Write "not measured" with the reason, and label findings
 from reading source as potential impact. Label every measured value with its source (local run, lab
-run, live request, trace, field data, device) and never present one kind as another. A verdict that
-contains an invented number is malformed. Hold "blocked" and "impossible" to the same bar as "works":
+run, live request, trace, field data, device) and never present one kind as another. A
+before-and-after comparison is valid only when both sides ran the same scenario: the same command,
+data, conditions, and repetitions; when they cannot, state an absolute budget and measure each side
+against it. A verdict that contains an invented number is malformed. Hold "blocked" and "impossible" to the same bar as "works":
 check that the credential is really absent or the tool really cannot load.
 
 ## 9. Evidence and proof layout
@@ -653,7 +698,10 @@ The auditor, or the verifier in its final-audit mode, writes its verdict to
 `.drive/reviews/<date>-final-audit.json`. You validate it like any verdict and never edit it, and every
 row that becomes Done cites it as its `review:` token. On no-go, apply the downgrades, fix what the
 budget allows, and re-audit with a fresh agent, at most twice more; then the rows keep the rungs the
-last audit supports and the run ends `stopped`. A no-go never closes a run, stopped or done: address
+last audit supports and the run ends `stopped`. A re-audit is a new Agent spawn with the brief rebuilt
+from files, never a `SendMessage` to, or a resume of, the auditor that wrote the no-go, which has
+already reached its conclusion and would check its own ruling; the lint refuses a go written by the
+agent instance that wrote the earlier no-go. A no-go never closes a run, stopped or done: address
 its findings (usually by narrowing rows with `why:` tokens or DECISIONS.md entries and fixing the
 report) and get a fresh passing audit before `lint --final` and `drive.py end` accept it.
 
@@ -690,6 +738,11 @@ report) and get a fresh passing audit before `lint --final` and `drive.py end` a
 - A dispositions file missing a gap, or a gap marked `fixed` without a test that fails on the parent.
 - A rubric file changed during a verification loop, or no rubric committed before the first maker.
 - A fourth round on a three-round shape, or Done written after the bound was reached without a pass.
+- A second full planning review round at S or M, or a scoped re-check that re-read the whole artifact.
+- A classification, spec, design, or test-plan review round with no file under `.drive/reviews/`.
+- Per-package verifier rounds at M for packages with no auth, money, or data-loss claim, with no
+  DECISIONS.md entry saying why.
+- A re-audit run by the auditor instance that wrote the no-go.
 - The same gap key and location, or the same defect class, in two rounds with no investigation file
   between them.
 - Reviewer prompts containing "be conservative", "only important", or "no nitpicks".

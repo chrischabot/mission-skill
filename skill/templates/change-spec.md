@@ -20,12 +20,15 @@ page briefs live in .drive/content-plan/. Delete every guidance comment before t
 ## Blast radius
 <!-- Copied from .drive/how-it-works.md at the spec phase (at S, from STATE.md Verified facts). The
 score chooses the discipline in references/shapes/feature.md: small as written; medium adds goldens on
-shared contracts and a flag; large re-classifies to move/migration. -->
+shared contracts and a flag; large re-classifies to move/migration. drive:architect fills Safe because; the severe tester receives
+it as a claim to refute. -->
 Score: <small | medium | large>, because <entry points and external consumers counted>
 
 | change point | depends on it | how found | covered by real tests | risk if it breaks |
 |---|---|---|---|---|
 | <path or symbol> | <callers, consumers, jobs, other repositories, configuration> | `<grep or search command>` | <test path, or none> | <what a user or operator would see> |
+
+Safe because: <the one fact that keeps every dependant above working, in one sentence> · proved by <test:<path>::<name> | `<command>` with its output path | unproven>
 
 ## Dialect
 <!-- The three nearest existing examples of what this change adds, copied from .drive/how-it-works.md.

@@ -102,7 +102,13 @@ exists.
   flags, bindings, exact deploy target), data shape (sizes, nulls, unicode, cardinality past a
   limit), runtime (real engine against local substitute), artifact staleness, and the harness. Teach
   the local harness the constraint, or reproduce live and read-only with a captured input.
-- **Visual.** Capture a screenshot and the accessibility tree; assert on the tree.
+- **Visual.** Drive the reported user path through real input and assert on the accessibility tree,
+  with a screenshot beside it. The state and network switches of `references/ui-verification.md`
+  section 3 may arrange preconditions (a seeded account, an offline network) but never open the broken
+  state itself: a repro that loads `?__state=error` proves the error screen renders, not that the
+  reported path reaches it. Write the correct final state and the broken one on the Repro line before
+  calling it reproduced, because an expected dialog, loading state, or setup step is not the bug; then
+  reset state and drive the path again to the same broken state.
 - **Budget.** Three strategies without a failing command: switch to live capture; if that fails,
   stop and report what was tried and what would make it reproducible. Without a reproducer, no row
   rises above Partial.
@@ -124,6 +130,7 @@ plausible classes, record both and treat the second as a family of hypotheses.
 | Vanishes when observed | goes away with a debugger, logging, or an unoptimized build | ring-buffer logging dumped only on failure; identical build flags; differential on build configuration | calling it fixed because instrumentation shifted timing |
 | Resource leak | monotonic growth; out of memory after hours; throughput decays | a soak script that compresses time; heap snapshots at three points, diffed by retained type; bisect with a soak threshold | periodic restarts, a bigger instance |
 | Environment or configuration drift | one environment fails; works locally | capture both environments' fingerprints (versions, flags, bindings, secrets present, compatibility date) and apply half the differences at a time | hand-editing production configuration |
+| Stale persistent state | fails after a restart, upgrade, or crash; clears when a cache, lock file, or state file is removed | snapshot the state directory while it fails; restore the snapshot onto a clean install to reproduce; bisect the snapshot's contents by restoring half at a time | deleting the file as the fix, or wiping state at every start |
 | Dependency upgrade | broke after a lockfile change | read the changelog first; old and new pinned side by side; bisect versions or lockfile commits | pinning forever with no Open failure |
 | Data-dependent | only some records, tenants, or inputs | capture the failing input with personal data removed; shrink it until removing any one element makes the failure vanish; a property test around the minimal case | special-casing the one bad record |
 | Distributed or async | duplicates, lost or reordered effects | replay recorded sequences; force redelivery; kill between accept and record; correlation ids end to end | deduplicating in the display only |
@@ -140,7 +147,8 @@ variable and must be replaced by logging dumped only on failure.
 **Keep the ledger.** Start with three to five candidates across layers (data, logic, timing,
 configuration, platform, stale artifact). Write each prediction and what you expect if it is false
 before running its experiment, run the cheapest experiment that separates the likeliest, and change one
-variable at a time; a bundled change is no experiment. Refuted rows stay with their evidence and are
+variable at a time; a bundled change is no experiment. A cause the goal or the bug report suggests
+enters as one of those rows with its own prediction, never as the premise of the others. Refuted rows stay with their evidence and are
 listed as "do not re-test" in every later brief. Several partial rows may be joint contributors rather
 than rivals: test the combination. Probe or read a platform instead of guessing about it. Experiments
 that change code run in a detached worktree under `/tmp`, with `HUNT-<slug>` instrumentation.
@@ -231,10 +239,30 @@ alert or smoke check for a recurrence, fired once (`references/observability.md`
 the final audit from `drive:auditor`.
 
 **`fix/perf`.** Write the budget (p95 latency, memory, query count) as a CONSTRAINTS.md row, baseline
-with a script on a named path, profile, and give each ledger row a predicted gain. A change stays a
+with a script on a named path, profile, and give each ledger row a predicted gain. Before the baseline
+counts, show that the benchmark can see the problem: run it on one case that should show the symptom
+and one that should not, and record under HUNT.md's Reproduction that they differ by more than
+run-to-run variance. A benchmark that cannot separate them yields variance figures that look like
+evidence, so fix the workload before measuring anything. Compare before and after only on the same
+scenario; when the baseline cannot run the scenario, state an absolute budget instead of a ratio
+between unlike runs. A change stays a
 hypothesis until re-measured exactly as the baseline, one change at a time, against run-to-run
 variance. Keep it only if it clears the threshold with every test green; revert it when within noise,
 worse, or bought with an edited test. Log every attempt; prefer counts to timings; keep the benchmark.
+
+Draw ledger candidates from these families once the profile is in hand. A family earns a row only
+when the profile shows its signal, and the row makes the claim the family requires.
+
+| Family | Profile signal that earns an attempt | Claim the row must make |
+|---|---|---|
+| Elimination | time spent on work whose result nothing uses (an always-off path, a mirror of state held elsewhere, a legacy branch) | that nothing uses it, from reading the callers; a profile shows what is slow, never that it can go |
+| Divide and conquer | cost grows with input size | how the split bounds each piece, or that the pieces are independent when run in parallel |
+| Caching | the same computation or fetch repeats on identical inputs | what invalidates the stored value, and the test that changes it |
+| Indirection | the hot path does work a cheaper intermediate could hold (a scan where an index fits, work on the interactive thread) | that the added step removes more from the hot path than it adds |
+| Batching | many small operations each pay a fixed overhead (a query, request, system call, draw) | the count of that overhead before and after |
+| Redundancy | the wait is dominated by one slow instance or attempt | that the wait dominates and the system has headroom for duplicate work |
+| Lazy evaluation | cost spent on results that are unused or not yet needed (eager start-up work, off-screen rendering) | the first-use path and its cost once deferred |
+| Scheduling | work that must happen lands while someone is waiting | the change measured on the interactive path, not as total work |
 
 ## Size and traits
 

@@ -7,7 +7,6 @@ max_turns: 80
 timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
-  Evaluation harness note, not from the user: this run is scored on the diagnosis and the fix.
   End the run once the fix is committed and independently verified.
 ---
 
