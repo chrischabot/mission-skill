@@ -118,9 +118,9 @@ code, and pushed to `chrischabot/mission-skill`.
 | An in-place `sed` script naming a frozen path was read as a write target | in-place targets skip the script (7839a33) |
 | The two lesson candidates | verified, narrowed, and written where the instructions live (4b1c639) |
 
-Still being fixed when this was written: the final auditor's refused scratch-copy `sed -i ''`, a
-variable assigned a literal path earlier in the same command, `for` loops in read-only reviews, a
-`>` inside an awk string, and the missing `model` field on verdicts.
+The final auditor's refused commands were fixed after the run closed (5836b1b): a scratch-copy
+`sed -i ''`, a variable assigned a literal path earlier in the same command, `for` loops in read-only
+reviews, and a `>` inside an awk string; verdicts now take an optional `model` field.
 
 ## Recommendations not yet acted on
 

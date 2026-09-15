@@ -1,6 +1,7 @@
-"""Severe tests for four defects a live drive run found on 2026-09-15.
+"""Severe tests for defects live drive runs found on 2026-09-15.
 
-Each class names the defect it covers. Every test drives the real path (drive.py lint and hook-snapshot as subprocesses),
+Each class names the defect it covers. Every test drives the real path (drive.py lint, hook-guard, and hook-snapshot as
+subprocesses),
 and each class holds tests that fail against drive.py as it stood before the fix."""
 import json
 from pathlib import Path
@@ -438,3 +439,158 @@ class InPlaceScriptTextTests(DriveTestCase):
                 result = self.bash(command)
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("frozen", result.stderr)
+
+
+class AuditorHookGuard:
+    """Runs the real hook-guard subprocess as a read-only reviewer in a fresh run (not itself a TestCase)."""
+
+    def setUp(self):
+        super().setUp()
+        self.repo = self.make_run()
+        # The auditor's scratch copy lived under /private/tmp; the tests' own scratch root stays a throwaway root too.
+        self.tmp_env = {"DRIVE_TMP_ROOTS": "{}:/private/tmp".format(self.scratch)}
+
+    def guard_as(self, command, agent="drive:auditor"):
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": command},
+                   "cwd": str(self.repo), "session_id": "s-main", "tool_use_id": "x", "agent_type": agent,
+                   "agent_id": "agent-a"}
+        return self.run_drive("hook-guard", stdin=json.dumps(payload), env=self.tmp_env)
+
+    def assertAllowed(self, command, agent="drive:auditor"):
+        result = self.guard_as(command, agent)
+        self.assertEqual(result.returncode, 0, "{} was refused for {}: {}".format(command, agent, result.stderr))
+
+    def assertRefused(self, command, fragment, agent="drive:auditor"):
+        result = self.guard_as(command, agent)
+        self.assertEqual(result.returncode, 2, "{} was allowed for {}".format(command, agent))
+        self.assertIn(fragment, result.stderr)
+
+
+class BsdSedBackupSuffixTests(AuditorHookGuard, DriveTestCase):
+    """Defect 1 of the linkkeeper final audit: `sed -i '' ...` passes BSD sed's empty backup suffix as its own argument,
+    and the guard took the script for the file the edit writes."""
+
+    def test_bsd_sed_in_place_in_a_scratch_copy_is_allowed(self):
+        self.assertAllowed("sed -i '' 's/^_HAS_TAG = .*/_HAS_TAG = \"instr(b.tags, ?) > 0\"/' "
+                           "/private/tmp/drive-audit-linkkeeper/linkkeeper/search.py")
+        self.assertAllowed("sed -i .orig -e 's/a/b/' /private/tmp/drive-audit-linkkeeper/linkkeeper/search.py")
+
+    def test_bsd_sed_in_place_in_the_project_is_still_refused_naming_the_file(self):
+        self.assertRefused("sed -i '' 's/a/b/' src/app.py", "writes src/app.py outside its scope")
+        self.assertRefused("sed -i .bak 's/a/b/' src/app.py", "writes src/app.py outside its scope")
+
+    def test_gnu_attached_suffix_still_works(self):
+        self.assertAllowed("sed -i.bak 's/a/b/' /private/tmp/drive-audit-linkkeeper/file")
+        self.assertRefused("sed -i.bak 's/a/b/' src/app.py", "writes src/app.py outside its scope")
+
+    def test_a_sed_write_command_behind_the_empty_suffix_is_still_seen(self):
+        self.assertRefused("sed -i '' 's/a/b/w src/leak.txt' /private/tmp/drive-audit-linkkeeper/file", "(w, W, or e)")
+
+
+class LiteralVariableTests(AuditorHookGuard, DriveTestCase):
+    """Defect 2: `S=<scratch> && mkdir -p "$S" && (... > "$S/pytest.txt")` was refused because $S was unknowable, though
+    the same command line had just assigned it a literal path."""
+
+    def scratchpad(self):
+        return "{}/claude-501/-Users-chabotc-Projects-linkkeeper/0f3c/scratchpad".format(self.scratch)
+
+    def test_a_literal_assigned_earlier_in_the_chain_is_resolved(self):
+        self.assertAllowed('S={} && mkdir -p "$S" && (python3 -m pytest -q > "$S/pytest.txt" 2>&1; echo "exit=$?" >> '
+                           '"${{S}}/pytest.txt")'.format(self.scratchpad()))
+        self.assertAllowed('S={}\nmkdir -p "$S"; cp README.md $S/'.format(self.scratchpad()))
+
+    def test_the_resolved_value_is_judged(self):
+        self.assertRefused('S=src && rm -rf "$S"', "'rm' on src deletes or moves")
+        self.assertRefused('S={} && S=src && rm -rf "$S"'.format(self.scratchpad()), "'rm' on src deletes or moves")
+
+    def test_a_value_that_may_not_hold_at_the_use_stays_unknowable(self):
+        pad = self.scratchpad()
+        for command in ['test -d x && S={} ; rm -rf "$S"',
+                        'test -d x || S={} && rm -rf "$S"',
+                        'test -d x &&\nS={}\nrm -rf "$S"',
+                        'S={} && test -d x && S=src; rm -rf "$S"',
+                        'S={} ; if test -d x; then S=src; fi; rm -rf "$S"',
+                        'S={} ; {{ S=src; }}; rm -rf "$S"',
+                        'S={} ; (S=src) ; rm -rf "$S"',
+                        'S={} | cat; rm -rf "$S"',
+                        'S={} & rm -rf "$S"',
+                        'S={} && S=$(pwd) && rm -rf "$S"',
+                        'S={} && export S=src && rm -rf "$S"',
+                        'S={} && read S && rm -rf "$S"',
+                        'S={} && for S in src; do true; done; rm -rf "$S"',
+                        "S={} && rm -rf '$S'",
+                        'S={} && rm -rf "$SX"']:
+            with self.subTest(command=command):
+                self.assertRefused(command.format(pad), "deletes or moves")
+
+
+class ShellLoopTests(AuditorHookGuard, DriveTestCase):
+    """Defect 3: a read-only review's `for f in $(find ...); do ...; done` was refused because 'for' was judged as a
+    command name."""
+
+    LOOP = ("for f in $(find .drive/proofs -name 'verdict.json' | sort); do echo \"--- $f\"; "
+            "jq -c '{unit, verdict, rung_supported}' \"$f\"; done")
+
+    def test_a_read_only_loop_is_allowed_for_the_reviewers(self):
+        for agent in ("drive:auditor", "drive:verifier"):
+            with self.subTest(agent=agent):
+                self.assertAllowed(self.LOOP, agent)
+                self.assertAllowed("for f in README.md src/auth.py\ndo\n  wc -l \"$f\"\ndone > /dev/null", agent)
+                self.assertAllowed("if test -d .drive/proofs; then ls .drive/proofs; else echo none; fi", agent)
+                self.assertAllowed("while read -r line; do echo \"$line\"; done < README.md", agent)
+
+    def test_a_loop_body_or_list_that_writes_outside_scope_stays_refused(self):
+        self.assertRefused('for f in src/*.py; do rm "$f"; done', "'rm' on $f deletes or moves")
+        self.assertRefused("for f in $(rm -rf src); do echo $f; done", "'rm' on src deletes or moves")
+        self.assertRefused("for f in a b; do echo $f > src/out.txt; done", "Redirecting output into src/out.txt")
+        self.assertRefused("for f in a; do echo $f; done > src/out.txt", "Redirecting output into src/out.txt")
+        self.assertRefused("if true; then touch src/new.py; fi", "'touch' writes src/new.py")
+
+
+class AwkStringLiteralTests(AuditorHookGuard, DriveTestCase):
+    """Defect 4: a `>` inside an awk string literal read as an awk output redirection."""
+
+    REFUSAL = "This awk program can write files or run commands"
+
+    def test_a_greater_than_inside_an_awk_string_is_not_a_write(self):
+        self.assertAllowed("awk '/^_HAS_TAG = /{print \"_HAS_TAG = \\\"instr(b.tags, ?) > 0\\\"\"; next} {print}' "
+                           "src/auth.py > /private/tmp/drive-audit-linkkeeper/search.py.new")
+        self.assertAllowed("awk '$0 ~ /a\"b/ {print \"x | getline\"}' README.md")
+
+    def test_a_real_awk_write_or_command_still_matches(self):
+        for program in ['{print > "out.txt"}', '{print "a > b" > "out.txt"}', '{printf "%s", $0 >> "out.txt"}',
+                        '{"date" | getline d; print d}', '{print "x" | "sh"; system("rm x")}', '/"/ {print > "o"}',
+                        '{print "unterminated > x}']:
+            with self.subTest(program=program):
+                self.assertRefused("awk '{}' README.md".format(program), self.REFUSAL)
+
+    def test_the_shell_redirect_after_the_program_is_still_judged(self):
+        self.assertRefused("awk '{print \"a > b\"}' README.md > src/out.txt", "Redirecting output into src/out.txt")
+
+
+class VerdictModelTests(Cli, DriveTestCase):
+    """Defect 5: verdict.schema.json had no model field, so a verdict could not record which model served the reviewer."""
+
+    def lint_with(self, extra):
+        repo = self.make_run()
+        rel = ".drive/proofs/{}/r1/verdict.json".format(KEY)
+        self.write(repo, rel, dict(verdict(KEY), **extra))
+        self.sign(repo, rel)
+        return [line for line in self.lint_cli(repo) if "model" in line]
+
+    def test_a_verdict_may_record_its_model(self):
+        self.assertEqual(self.lint_with({"model": "claude-opus-5"}), [])
+
+    def test_the_model_is_optional(self):
+        self.assertEqual(self.lint_with({}), [])
+
+    def test_the_model_must_be_a_string(self):
+        self.assertNotEqual(self.lint_with({"model": 5}), [])
+
+    def test_the_schema_and_the_reviewer_agents_describe_it(self):
+        schema = json.loads((SKILL / "templates/verdict.schema.json").read_text())
+        self.assertEqual(schema["properties"]["model"]["type"], "string")
+        self.assertNotIn("model", schema["required"])
+        for name in ("verifier", "auditor", "ui-reviewer"):
+            with self.subTest(agent=name):
+                self.assertIn("`model`", (SKILL / "agents/{}.md".format(name)).read_text())

@@ -71,7 +71,8 @@ are defined; the points below are where audits most often go wrong.
    event.
 7. Save the verdict schema to `.drive/reviews/<date>-final-audit.json` with a heredoc as above: `pass`
    is go, `fail` is no-go, each entry in `claims[]` carries its own `rung_supported` for its sampled
-   row, and every STATUS downgrade is a gap. Record each command in `ran` exactly as you ran it, with its real paths; an abbreviation
+   row, and every STATUS downgrade is a gap. Record the model ID you ran as (for example `claude-opus-5`) in the
+   optional top-level `model`. Record each command in `ran` exactly as you ran it, with its real paths; an abbreviation
   such as `<scratch>` or `{scratch}` reads as an unfilled template placeholder and fails the lint.
 
 ## Dispute

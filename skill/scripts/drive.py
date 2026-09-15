@@ -4462,9 +4462,28 @@ def frozen_block_reason(root, path, role, container=False, entries=None, run_con
             "changes it while an amendment is open.".format(hit))
 
 
+def without_sed_backup_suffix(args):
+    """sed arguments without a backup suffix given as its own argument: BSD sed reads `sed -i '' 's/a/b/' file` and
+    `sed -i .bak ...` as -i with the suffix '' or .bak, so an empty argument or one starting with '.' right after an exact
+    -i is neither the script nor a file. GNU's attached -i.bak is an ordinary flag. Perl never takes a separate suffix, so
+    its arguments are not passed through this."""
+    out, skip = [], False
+    for index, arg in enumerate(args):
+        if skip:
+            skip = False
+            continue
+        out.append(arg)
+        if arg == "-i" and index + 1 < len(args) and (args[index + 1] == "" or args[index + 1].startswith(".")):
+            skip = True
+    return out
+
+
 def in_place_targets(base, args):
     """The files an in-place sed, perl, or ruby edit writes: never its script. A script comes from -e, --expression,
-    -f, or --file (whose values are skipped), or else is the first operand."""
+    -f, or --file (whose values are skipped), or else is the first operand. A BSD sed backup suffix given as its own
+    argument after -i is skipped too."""
+    if base in ("sed", "gsed"):
+        args = without_sed_backup_suffix(args)
     value_flags = ("-e", "--expression", "-f", "--file") if base in ("sed", "gsed") else ("-e", "-E")
     operands, scripted, skip, rest = [], False, False, False
     for arg in args:
@@ -4883,34 +4902,62 @@ def split_shell(command, depth=0):
     return [record["text"] for record in split_shell_records(command, depth)]
 
 
-def split_shell_records(command, depth=0):
+NO_EXPANSION = (-1, 0, False)
+
+
+def split_shell_records(command, depth=0, outer=None):
     """Simple commands in a shell string, including those inside $(...), backticks, and subshells, each as
-    {"text", "stdin", "upstream"}. A here-document's body is data, not commands: after the line holding `<<WORD` (or
-    <<'WORD', <<"WORD", <<-WORD), the lines up to the delimiter are skipped, several here-documents on one line in order,
-    and an unterminated one runs to the end, as in bash. Each body is kept in "stdin" of the simple command that owns
-    the operator, and "upstream" holds the bodies of the earlier commands in the same pipeline, so a shell or
-    interpreter reading one can be judged for it. A here-string (<<<) is not a here-document. The command line itself,
-    with its redirections, is still judged, and so are the $(...) and backtick substitutions bash expands in an
-    unquoted body."""
+    {"text", "stdin", "upstream", "at", "nested", "grouped", "end", "piped"}. A here-document's body is data, not
+    commands: after the line holding `<<WORD` (or <<'WORD', <<"WORD", <<-WORD), the lines up to the delimiter are skipped,
+    several here-documents on one line in order, and an unterminated one runs to the end, as in bash. Each body is kept
+    in "stdin" of the simple command that owns the operator, and "upstream" holds the bodies of the earlier commands in
+    the same pipeline, so a shell or interpreter reading one can be judged for it. A here-string (<<<) is not a
+    here-document. The command line itself, with its redirections, is still judged, and so are the $(...) and backtick
+    substitutions bash expands in an unquoted body.
+
+    "at" places a command in the top-level command line as (list, step, and_only): lists are separated by ;, a newline,
+    or &, steps within a list by && and ||, and and_only says every step before it in its list was joined by &&. A newline
+    right after &&, ||, or | continues the list. A command inside a substitution or subshell is "nested" and carries the
+    place of the top-level step holding it (`outer`); one inside a { } group is "grouped"; "end" is the operator after it,
+    and "piped" marks a member of a pipeline of two or more. Substitutions in a here-document body run when its command
+    does, not where the body sits, so they carry NO_EXPANSION. Guard.check_command reads these places to decide whether a
+    literal variable assignment has certainly run before a later use."""
     if depth > 8:
-        return [{"text": command, "stdin": [], "upstream": []}]
+        return [{"text": command, "stdin": [], "upstream": [], "at": outer or NO_EXPANSION, "nested": True,
+                 "grouped": False, "end": "", "piped": False}]
     segments, current, index, quote = [], [], 0, None
     size = len(command)
     pending = []
     state = {"bodies": [], "pipeline": []}
     pipelines = [state["pipeline"]]
+    place = {"list": 0, "step": 0, "and_only": True, "last": ";", "fresh": True, "braces": 0}
 
-    def flush(piped=False):
+    def at():
+        return outer if outer is not None else (place["list"], place["step"], place["and_only"])
+
+    def flush(connector=""):
         piece = "".join(current).strip()
         if piece:
-            record = {"text": piece, "stdin": state["bodies"], "upstream": []}
+            record = {"text": piece, "stdin": state["bodies"], "upstream": [], "at": at(), "nested": depth > 0,
+                      "grouped": place["braces"] > 0, "end": connector, "piped": False}
             segments.append(record)
             state["pipeline"].append(record)
+            place["fresh"] = False
         state["bodies"] = []
         current.clear()
-        if not piped:
+        if connector != "|":
             state["pipeline"] = []
             pipelines.append(state["pipeline"])
+        if not connector:
+            return
+        if connector == ";" and place["fresh"] and place["last"] in ("&&", "||", "|"):
+            return
+        if connector in (";", "&"):
+            place.update(list=place["list"] + 1, step=0, and_only=True)
+        elif connector in ("&&", "||"):
+            place["step"] += 1
+            place["and_only"] = place["and_only"] and connector == "&&"
+        place.update(last=connector, fresh=True)
 
     while index < size:
         char = command[index]
@@ -4932,13 +4979,13 @@ def split_shell_records(command, depth=0):
                 continue
             if command.startswith("$(", index):
                 inner, index = extract_paren(command, index + 1)
-                segments.extend(split_shell_records(inner, depth + 1))
+                segments.extend(split_shell_records(inner, depth + 1, at()))
                 current.append("SUBST")
                 continue
             if char == "`":
                 end = command.find("`", index + 1)
                 end = size if end < 0 else end
-                segments.extend(split_shell_records(command[index + 1:end], depth + 1))
+                segments.extend(split_shell_records(command[index + 1:end], depth + 1, at()))
                 current.append("SUBST")
                 index = end + 1
                 continue
@@ -4965,23 +5012,24 @@ def split_shell_records(command, depth=0):
                 continue
         if command.startswith(("$(", "<(", ">("), index):
             inner, index = extract_paren(command, index + 1)
-            segments.extend(split_shell_records(inner, depth + 1))
+            segments.extend(split_shell_records(inner, depth + 1, at()))
             current.append("SUBST")
             continue
         if char == "(":
             inner, index = extract_paren(command, index)
             flush()
-            segments.extend(split_shell_records(inner, depth + 1))
+            segments.extend(split_shell_records(inner, depth + 1, at()))
+            place["fresh"] = False
             continue
         if char == "`":
             end = command.find("`", index + 1)
             end = size if end < 0 else end
-            segments.extend(split_shell_records(command[index + 1:end], depth + 1))
+            segments.extend(split_shell_records(command[index + 1:end], depth + 1, at()))
             current.append("SUBST")
             index = end + 1
             continue
         if char in ";\n":
-            flush()
+            flush(";")
             index += 1
             if char == "\n":
                 while pending:
@@ -4989,16 +5037,22 @@ def split_shell_records(command, depth=0):
                     body, index = heredoc_body(command, index, word, strip_tabs)
                     owner.append(body)
                     if not quoted:
-                        segments.extend(heredoc_substitutions(body, depth))
+                        for record in heredoc_substitutions(body, depth):
+                            record["at"] = NO_EXPANSION
+                            segments.append(record)
             continue
         if char == "&":
             before = command[index - 1] if index else ""
             after = command[index + 1] if index + 1 < size else ""
             if before in "<>" or after == ">":
                 current.append(char)
+                index += 1
+            elif after == "&":
+                flush("&&")
+                index += 2
             else:
-                flush()
-            index += 1
+                flush("&")
+                index += 1
             continue
         if char == "|":
             before = command[index - 1] if index else ""
@@ -5006,14 +5060,16 @@ def split_shell_records(command, depth=0):
                 current.append(char)
                 index += 1
             elif command.startswith("||", index):
-                flush()
+                flush("||")
                 index += 2
             else:
-                flush(piped=True)
+                flush("|")
                 index += 2 if command.startswith("|&", index) else 1
             continue
         if char in "{}" and (index == 0 or command[index - 1] in " \t;&|\n") and (index + 1 >= size or command[index + 1] in " \t;\n"):
             flush()
+            place["braces"] = place["braces"] + 1 if char == "{" else max(0, place["braces"] - 1)
+            place["fresh"] = False
             index += 1
             continue
         if char == "#" and (index == 0 or command[index - 1] in " \t\n;&|"):
@@ -5026,6 +5082,7 @@ def split_shell_records(command, depth=0):
     for pipeline in pipelines:
         for position, record in enumerate(pipeline):
             record["upstream"] = [body for earlier in pipeline[:position] for body in earlier["stdin"]]
+            record["piped"] = len(pipeline) > 1
     return segments
 
 
@@ -5089,6 +5146,130 @@ def shell_words(segment):
 
 
 ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+# A value the guard substitutes for a later $NAME: no spaces, quotes, globs, tildes, or expansions, so pasting it into the
+# command text reads exactly as bash's expansion of it would.
+LITERAL_VALUE_RE = re.compile(r"^[A-Za-z0-9_./@%+=:,-]+$")
+SHELL_KEYWORDS = {"if", "then", "else", "elif", "do", "while", "until", "!", "fi", "done", "esac"}
+BLOCK_OPENERS = {"if", "while", "until", "for", "select", "case"}
+BLOCK_CLOSERS = {"fi", "done", "esac"}
+VARIABLE_BINDERS = {"read", "unset", "export", "declare", "typeset", "local", "readonly", "getopts", "mapfile", "readarray",
+                    "printf", "for", "select", "let"}
+AWK_REGEX_START = {"", "(", "{", "}", ",", ";", "!", "~", "&", "|", "?", ":", "=", "\n"}
+
+
+def assignment_reaches(assigned, used):
+    """Whether an assignment at place `assigned` has certainly run whenever a command at place `used` runs, with places
+    as split_shell_records gives them. The first step of a list always runs, so it reaches everything after it; a later
+    step reaches only the later steps of its own list, and only when every step from the list's start was joined by &&."""
+    if assigned[0] < 0 or used[0] < 0 or tuple(used[:2]) <= tuple(assigned[:2]):
+        return False
+    if assigned[1] == 0:
+        return True
+    return used[0] == assigned[0] and bool(used[2])
+
+
+def expand_literal_variables(text, values):
+    """`text` with each $NAME and ${NAME} whose NAME is in `values` replaced by its literal value, where bash would expand
+    it: outside single quotes and not after a backslash. Every other expansion is left as written, and stays unknowable."""
+    out, index, size, quote = [], 0, len(text), None
+    while index < size:
+        char = text[index]
+        if quote == "'":
+            out.append(char)
+            if char == "'":
+                quote = None
+            index += 1
+            continue
+        if char == "\\" and index + 1 < size:
+            out.append(text[index:index + 2])
+            index += 2
+            continue
+        if char in "'\"":
+            if char == "'" and quote is None:
+                quote = "'"
+            elif char == '"':
+                quote = None if quote == '"' else '"'
+            out.append(char)
+            index += 1
+            continue
+        if char == "$":
+            match = re.match(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))", text[index:])
+            name = (match.group(1) or match.group(2)) if match else None
+            if name in values:
+                out.append(values[name])
+                index += match.end()
+                continue
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def update_literal_variables(known, record, words, in_block):
+    """After one simple command, remember the literal assignments later commands in the same command line may rely on
+    ({name: (value, place)}), and forget every variable the command may bind any other way. An assignment counts only as
+    a command of its own at the top level: not inside a substitution, subshell, { } group, if, loop, or case, not in a
+    pipeline or backgrounded, and with a value holding no $, backtick, or substitution. A prefix assignment (S=x cmd),
+    export, read, unset, a for variable, and the like make the name unknowable; eval, source, and . forget them all."""
+    rest = list(words)
+    while rest and rest[0] in SHELL_KEYWORDS:
+        rest = rest[1:]
+    if rest and all(ASSIGNMENT_RE.match(word) for word in rest):
+        certain = not (in_block or record.get("nested") or record.get("grouped") or record.get("piped")
+                       or record.get("end") == "&" or any(mark in record["text"] for mark in ("$", "`", "SUBST")))
+        for word in rest:
+            name, value = word.split("=", 1)
+            if certain and LITERAL_VALUE_RE.match(value):
+                known[name] = (value, record.get("at") or NO_EXPANSION)
+            else:
+                known.pop(name, None)
+        return
+    base = os.path.basename(rest[0]) if rest else ""
+    if base in ("eval", "source", "."):
+        known.clear()
+        return
+    for name in list(known):
+        if any(re.match(r"^{}(\+?=|\[)".format(name), word) for word in words) or (base in VARIABLE_BINDERS and name in words):
+            known.pop(name)
+
+
+def awk_program_without_literals(program):
+    """The awk program with each string literal emptied to "" and each regular-expression literal to //, so a > or | in
+    quoted text ("x > 0") is not read as output redirection or a pipe. A / opens a regex literal where an operand starts
+    (at the beginning, or after one of ( { } , ; ! ~ & | ? : = or a newline) and is division elsewhere. An unterminated
+    literal is left as written, so the rest of the program is still matched."""
+    out, index, size, last = [], 0, len(program), ""
+    while index < size:
+        char = program[index]
+        if char == '"' or (char == "/" and last in AWK_REGEX_START):
+            end, bracket = index + 1, False
+            while end < size:
+                inner = program[end]
+                if inner == "\\":
+                    end += 2
+                    continue
+                if inner == "\n":
+                    break
+                if char == "/" and inner == "[":
+                    bracket = True
+                elif char == "/" and inner == "]":
+                    bracket = False
+                elif inner == char and not bracket:
+                    break
+                end += 1
+            if end >= size or program[end] != char:
+                out.append(program[index:])
+                break
+            out.append(char * 2)
+            last = char
+            index = end + 1
+            continue
+        out.append(char)
+        if char == "\n" or not char.isspace():
+            last = char
+        index += 1
+    return "".join(out)
+
+
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish"}
 INTERPRETERS = {"python", "python3", "node", "ruby", "perl", "deno", "bun"}
 GIT_READ_ONLY = {"status", "log", "diff", "show", "rev-parse", "ls-files", "ls-tree", "blame", "grep", "archive",
@@ -5161,6 +5342,9 @@ def strip_wrappers(words):
             argv = argv[1:]
         elif head in ("if", "then", "else", "elif", "do", "while", "until", "!", "fi", "done", "esac"):
             argv = argv[1:]
+        elif head in ("for", "select"):
+            # `for NAME in WORDS` runs nothing itself: its substitutions and body are simple commands of their own.
+            return []
         elif head in ("npx", "bunx") or (head in ("pnpm", "yarn", "bun") and len(argv) > 1 and argv[1] in ("dlx", "exec", "x")) \
                 or (head == "npm" and len(argv) > 1 and argv[1] in ("exec", "x")):
             argv = argv[1:] if head in ("npx", "bunx") else argv[2:]
@@ -5420,8 +5604,21 @@ class Guard:
         # The orchestrator's own scripts are checked like its commands; for agents a project script's
         # writes are the project's, and only its git, deploy, and hook calls are checked.
         paths_checked = self.restricted_paths and (not script or self.role == "orchestrator")
+        # NAME=<literal> earlier in the same command line is substituted into later commands it has certainly reached
+        # (S=/tmp/x && mkdir -p "$S"); if, while, until, for, select, and case bodies are tracked so an assignment inside
+        # one, which may not run, is never relied on.
+        known, block = {}, 0
         for record in split_shell_records(command):
-            words, redirects = shell_words(record["text"])
+            place = record.get("at") or NO_EXPANSION
+            values = {name: value for name, (value, assigned) in known.items() if assignment_reaches(assigned, place)}
+            words, redirects = shell_words(expand_literal_variables(record["text"], values) if values else record["text"])
+            head = words[0] if words else ""
+            in_block = block > 0 or head in BLOCK_OPENERS
+            if head in BLOCK_OPENERS:
+                block += 1
+            elif head in BLOCK_CLOSERS:
+                block = max(0, block - 1)
+            update_literal_variables(known, record, words, in_block)
             argv = strip_wrappers(words)
             stdin = self.stdin_inputs(record, redirects)
             reason = self.frozen_reason(argv, redirects, cwd, stdin)
@@ -5768,12 +5965,14 @@ class Guard:
                           "focused-test, or full-suite command in GOAL.md. A verdict or review file is written with a quoted "
                           "heredoc into your own output path, for example cat > .drive/reviews/<file> <<'JSON'.".format(words, base, judged))
         if base in ("awk", "gawk", "mawk"):
-            program = " ".join(a for a in argv[1:] if not a.startswith("-"))[:4000]
+            operands = [a for a in argv[1:] if not a.startswith("-")]
+            # String and regex literals are emptied in the program (the first operand) only, so "x > 0" is not a write.
+            program = " ".join([awk_program_without_literals(operands[0])] + operands[1:] if operands else [])[:4000]
             if "-f" in argv or AWK_WRITE_RE.search(program):
                 return True, "{}. This awk program can write files or run commands; use it only to read and print.".format(words)
         if base in ("sed", "gsed"):
             scripts = [argv[i + 1] for i, a in enumerate(argv[:-1]) if a in ("-e", "--expression")]
-            positional = [a for a in argv[1:] if not a.startswith("-")]
+            positional = [a for a in without_sed_backup_suffix(argv[1:]) if not a.startswith("-")]
             scripts = scripts or positional[:1]
             if "-f" in argv or any(SED_WRITE_RE.search(s) for s in scripts):
                 return True, "{}. This sed script can write files or run commands (w, W, or e); use sed only to read and print.".format(words)
@@ -6476,8 +6675,7 @@ class Guard:
         elif base == "dd":
             targets = [a[3:] for a in argv[1:] if a.startswith("of=")]
         elif base in ("sed", "gsed") and any(a == "-i" or a.startswith("-i") or a.startswith("--in-place") for a in argv[1:]):
-            has_script_flag = any(a in ("-e", "-f") or a.startswith(("--expression", "--file")) for a in argv[1:])
-            targets = operands if has_script_flag else operands[1:]
+            targets = in_place_targets(base, argv[1:])
         elif base == "perl" and any(re.match(r"^-\w*i", a) for a in argv[1:]):
             targets = operands[1:]
         elif base in ("curl",):

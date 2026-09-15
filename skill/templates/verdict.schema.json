@@ -8,6 +8,7 @@
   "additionalProperties": false,
   "properties": {
     "verdict": {"enum": ["pass", "fail", "blocked"], "description": "blocked means the verifier could not execute; it does not spend a round."},
+    "model": {"type": "string", "minLength": 1, "description": "Optional: the model ID the reviewer ran as, for example claude-opus-5, so the final audit can check it against references/models.md."},
     "unit": {"type": "string", "minLength": 1, "description": "The STATUS key or package id verified."},
     "round": {"type": "integer", "minimum": 1},
     "scope": {

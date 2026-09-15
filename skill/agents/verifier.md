@@ -140,7 +140,8 @@ rewrite the file. Write the verdict in a Bash call of its own and check it in a 
 non-zero, the whole call is recorded as failed. Write the verdict yourself with a Bash heredoc that names its full path, even when a handoff asks you to return it, following
 `templates/verdict.schema.json`: `verdict` (`pass`, `fail`, `blocked`), `unit`, `round`, `scope`,
 `ran`, `claims`, `gaps`, `harness_kindness`, `not_checked`, `rung_supported`, and `for_maker` (gaps
-only, no praise). Record each command in `ran` and a live `proof.json`'s `commands` exactly as you ran it, with its real paths; an abbreviation
+only, no praise). Record the model ID you ran as (for example `claude-opus-5`) in the optional top-level `model`, so the
+final audit can check it against `references/models.md`. Record each command in `ran` and a live `proof.json`'s `commands` exactly as you ran it, with its real paths; an abbreviation
 such as `<scratch>` or `{scratch}` reads as an unfilled template placeholder and fails the lint. Give each claim its own `rung_supported` for its key, which the lint prefers to the
 top-level value, and never write `Done` at the top level. A live `proof.json` you write needs every
 field the lint reads (`references/verification.md` section 4): `key`, `claim`, `environment`,
