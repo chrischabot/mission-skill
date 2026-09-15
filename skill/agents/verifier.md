@@ -133,7 +133,10 @@ The handoff names the mode and its one output path; the rules below always apply
 
 ## Verdict
 
-Write the verdict in a Bash call of its own and check it in a separate call: when a later command in the same call exits
+Write the verdict by the call the handoff's budget line names, or by call 50 when it names none,
+marking each claim you have not yet exercised `unverifiable`; your turn limit ends you without a final
+message, so a verdict never written loses the round. Use the calls left to settle those claims and
+rewrite the file. Write the verdict in a Bash call of its own and check it in a separate call: when a later command in the same call exits
 non-zero, the whole call is recorded as failed. Write the verdict yourself with a Bash heredoc that names its full path, even when a handoff asks you to return it, following
 `templates/verdict.schema.json`: `verdict` (`pass`, `fail`, `blocked`), `unit`, `round`, `scope`,
 `ran`, `claims`, `gaps`, `harness_kindness`, `not_checked`, `rung_supported`, and `for_maker` (gaps

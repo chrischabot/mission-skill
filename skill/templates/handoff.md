@@ -13,10 +13,12 @@ rubric: .drive/rubrics/<shape>.md at <commit sha that froze it>
 spec: <path and section: SPEC.md, HUNT.md brief, MIGRATION.md invariants, or RESEARCH.md>
 previous gaps: <path to the prior round's verdict.json, or none>
 output: templates/verdict.schema.json · proof directory .drive/proofs/<key>/r<n>/
+budget: at most <n> tool calls; write the verdict by call <m> at the latest, marking every claim not yet exercised unverifiable, then use the calls left to settle those and rewrite it
 
 <!-- Built by the orchestrator from files only. Never paste a maker's transcript, summary, report
 prose, honest_gaps, self-assessment, or any assertion that a claim holds; never add an opinion of
-quality, urgency, or remaining budget. One "### <claim key>" block per claim. -->
+quality or urgency, or the run's remaining budget. One verdict per handoff. One "### <claim key>"
+block per claim. -->
 
 ## Claims
 ### <claim key>

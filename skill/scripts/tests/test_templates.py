@@ -181,6 +181,7 @@ class TemplateFillTests(DriveTestCase):
             "spec:": "spec: .drive/SPEC.md, section Requirements",
             "previous gaps:": "previous gaps: none",
             "output:": "output: templates/verdict.schema.json · proof directory .drive/proofs/{}/r1/".format(KEY),
+            "budget:": "budget: at most 60 tool calls; write the verdict by call 50 at the latest",
             "### <claim key>": "### {}".format(KEY),
             "Claim:": "Claim: The export keeps the list totals",
             "What must be true:": "What must be true: an export of 101 invoices has the same total as the filtered list",

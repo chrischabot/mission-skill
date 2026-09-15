@@ -53,7 +53,11 @@ present, and the `tvly` CLI otherwise.
    Add your entries to a shared ledger such as `.drive/RESEARCH.md` with Edit, next to the section
    they belong in; never rewrite the whole file with Write, because other lanes write to it at the
    same time and a whole-file write erases what they added after you read it.
-7. Stop at the budget and list the questions left open.
+7. Write as you go. When a question closes or reaches its cap, save its sources and write its entry,
+   marking an open answer assumed pending refutation, before you start the next question. Your turn
+   limit ends you without a final message and nothing else enforces your budget, so an entry still
+   unwritten when the limit arrives is lost, and with it the lane.
+8. Stop at the budget and list the questions left open.
 
 ## Codebase archaeology
 

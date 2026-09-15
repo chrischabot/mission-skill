@@ -73,11 +73,14 @@ handoffs stay.
 | previous gaps | the prior round's `verdict.json` path and its dispositions file, or `none` |
 | round | `n/K`, and for a later round the scope from section 6 |
 | output | `templates/verdict.schema.json` and the proof directory for this round |
+| budget | a tool-call budget and the call by which the verdict is written, well below the verifier's `maxTurns` (60 calls, verdict by call 50, for its 80 turns); one verdict per handoff, with no more claims than can each get a refutation inside the budget, about eight as a starting size |
 
 The verifier never receives the maker's transcript, summary, report prose, `honest_gaps`, or
 self-assessment; any assertion that a claim holds ("tests pass", "fixed the race", "I made the cache
-safe"); your opinion of quality, urgency, or remaining budget; or any request to be quick, lenient, or
-confirmatory. "The cache must be safe under concurrent writes" is contract and belongs in the handoff.
+safe"); your opinion of quality or urgency, or the run's remaining budget; or any request to be quick,
+lenient, or confirmatory. The budget line is the verifier's own limit, not the run's: without it a
+verifier that reaches its turn limit ends with no verdict, while with it an unfinished claim is written
+as `unverifiable`. "The cache must be safe under concurrent writes" is contract and belongs in the handoff.
 "I made it safe" is a conclusion and never does. A `/code-review` finding enters only as a previous gap
 with its location, never with its argument.
 

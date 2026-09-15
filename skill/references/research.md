@@ -203,7 +203,8 @@ Question: <text>. Decision it serves: <text and file section>. Time window: <tex
 Lane: primary | independent | disconfirming | probe. Prefer: <domains, repositories, docs formats>.
 Installed version: <from the lockfile>. Scratch resource for probes: <name, or none>.
 Before you start, invoke the Skill tool with `<tavily-dynamic-search | tavily-research>`. (Only when named.)
-Budget: at most <n> tool calls. Stop when new sources repeat known evidence.
+Budget: at most <n> tool calls, and at most <m> per question when the brief carries more than one. Stop when new sources repeat known evidence.
+Write order: save each question's sources and write its entry when that question closes or reaches its cap, before the next one starts.
 Output: lane report to .drive/local/research/lanes/<phase>-<lane>-<slug>.md in the ledger entry format;
 raw text of each load-bearing source to .drive/local/research/sources/<source>-<date>.txt with URL,
 fetch date, and sha256 on its first lines; probes to .drive/research/probes/.
@@ -213,6 +214,10 @@ anything disconfirming, and empty lanes with terms searched; the report path; th
 Lessons that apply to this task
 <at most ten rules quoted verbatim>
 ```
+
+Keep a lane's budget at or below two thirds of the researcher's `maxTurns`, 40 calls for its 60 turns.
+Only the researcher keeps to the budget, and a lane that reaches its turn limit ends without a final
+message, so the write order is what stops an overrun from losing every answer the lane gathered.
 
 For a tier S question the single researcher also writes the ledger entry. For two or more lanes, spawn
 one `drive:researcher` with `model: "opus"` to reconcile; it reads the lane files and writes the delta
