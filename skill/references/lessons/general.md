@@ -72,3 +72,13 @@ by an eval case, and their Seen counts record only the instances written down.
 - Applies to: every claim tagged `[ui]`, every `publish` run, and any feature that sends messages or writes documents for people.
 - Not for: machine-to-machine payloads with a schema test at the boundary, which no person reads.
 - Seen: 1 (2026-08-20) · Added: 2026-09-14 · Confirmed by: seeded, not yet re-verified by drive:auditor
+
+### Write a large artifact in sections, never in one tool call
+- When: an agent is about to produce a plan, spec, report, or source file that runs to several hundred lines.
+- Do: write the file's skeleton first, then add one section per edit, keeping each tool call under about 300 lines, so progress reaches disk as it is made.
+- Because: a single very large write keeps the agent's output stream open with nothing arriving for minutes; the run's stall watchdog treats that as a dead agent, and the whole artifact is lost with nothing on disk.
+- Check: the planner prompt requires sectioned writes; a stalled agent's partial handoff shows no file written.
+- Verified by: two garderobe planning agents on Fabric, 2026-09-15. The first stalled after 180 seconds of idle stream while emitting SPEC.md in one write and left only its preamble; the second, a lean planner, went more than ten minutes without a step while PLAN.md was still absent. A respawn that wrote the spec as 21 module files completed.
+- Applies to: any agent writing a long document or file, on any harness with a stream or step watchdog.
+- Not for: short files that fit comfortably in one write.
+- Seen: 2 (2026-09-15) · Added: 2026-09-15 · Confirmed by: owner session, from the Fabric transcripts

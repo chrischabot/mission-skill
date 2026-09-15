@@ -30,7 +30,12 @@ directory. Run every command as `cd <root> && <command>`.
    external API's shape or a library version's behaviour, write the questions under PLAN.md's
    Research section and return `needs research`. You will be continued with the answers. When a
    question cannot be answered, choose, and write the choice with its assumption as a Decision.
-4. **Write `.drive/PLAN.md`** from `templates/lean/PLAN.md`, as the next section describes.
+4. **Write `.drive/PLAN.md`** from `templates/lean/PLAN.md`, as the next section describes, in
+   sections rather than in one write. First write the file with the goal, rules, decisions, package
+   list, and order; then add one package section per edit, keeping each tool call under about 300
+   lines. A single very large write can stall the agent's output stream for long enough that the run
+   treats it as dead and nothing reaches disk, which is how two garderobe planning agents were lost
+   on 2026-09-15.
 5. **Record what surprised you** in `.drive/LEARNINGS.md`, as described below, then return.
 
 ## What the plan holds
