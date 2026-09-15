@@ -3,8 +3,8 @@ name: classification-publish-research-website
 description: Market research followed by a designed website with blog and documentation sections that the goal asks to have deployed and live. Intake must classify it as shape publish, size L (a research deliverable and a multi-section site), with research-needed, prose-content, and ui among the traits. The run ends after intake.
 tags: [classification]
 expected_outcome: .drive/GOAL.md committed with shape publish, size L, traits including research-needed, prose-content, ui; no HTML written.
-max_turns: 40
-timeout_seconds: 900
+max_turns: 60
+timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
   Evaluation harness note, not from the user: the skill's scripts directory cannot be read from

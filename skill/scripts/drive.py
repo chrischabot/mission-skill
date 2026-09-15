@@ -253,12 +253,49 @@ def main_worktree_root(start):
     return common_path.parent if common_path.name == ".git" else None
 
 
+def _query_quietly(path, query) -> bool:
+    """One filesystem query that answers False instead of raising for a name the OS rejects: a component longer than
+    NAME_MAX, a path longer than PATH_MAX (both ENAMETOOLONG), or a NUL byte. The hooks meet such names whenever they
+    treat a command word or a code string literal from a tool call as a path, and a raise there refuses the call."""
+    try:
+        return query(Path(path))
+    except (OSError, ValueError):
+        return False
+
+
+def exists_quietly(path) -> bool:
+    """Path.exists(), answering False for a name the OS rejects."""
+    return _query_quietly(path, Path.exists)
+
+
+def is_file_quietly(path) -> bool:
+    """Path.is_file(), answering False for a name the OS rejects."""
+    return _query_quietly(path, Path.is_file)
+
+
+def is_dir_quietly(path) -> bool:
+    """Path.is_dir(), answering False for a name the OS rejects."""
+    return _query_quietly(path, Path.is_dir)
+
+
+def small_file_text(path, limit):
+    """The text of a regular file smaller than `limit` bytes, or None when it is missing, unreadable, that large or
+    larger, or named in a way the OS rejects, so an over-long name reads like a missing file."""
+    try:
+        path = Path(path)
+        if not path.is_file() or path.stat().st_size >= limit:
+            return None
+    except (OSError, ValueError):
+        return None
+    return read_text(path)
+
+
 def realpath_loose(path) -> Path:
     """Resolve symlinks on the longest existing prefix, then append the rest normalised."""
     path = Path(os.path.normpath(str(path)))
     existing = path
     tail = []
-    while not existing.exists() and existing != existing.parent:
+    while not exists_quietly(existing) and existing != existing.parent:
         tail.append(existing.name)
         existing = existing.parent
     resolved = Path(os.path.realpath(str(existing)))
@@ -540,7 +577,7 @@ def meta_agent_type(transcript):
     """The agentType Claude Code recorded beside a subagent transcript (agent-<id>.meta.json), or None."""
     path = Path(transcript)
     meta = path.with_name(path.stem + ".meta.json")
-    data, _ = load_json(meta) if meta.is_file() else (None, None)
+    data, _ = load_json(meta) if is_file_quietly(meta) else (None, None)
     value = data.get("agentType") if isinstance(data, dict) else None
     return value if isinstance(value, str) and value else None
 
@@ -560,7 +597,7 @@ def transcript_problem(root, rel, transcript, agent_type=None, agent_id=None, sh
     if not path.is_absolute() or not is_transcript_path(path):
         return "its transcript {} is not a Claude Code transcript under {}".format(
             transcript, " or ".join(str(r) for r in transcript_roots()))
-    if not path.is_file():
+    if not is_file_quietly(path):
         return "its transcript {} no longer exists (Claude Code deletes transcripts after cleanupPeriodDays)".format(transcript)
     recorded_type = meta_agent_type(path)
     if recorded_type and agent_type and not agent_types_match(recorded_type, agent_type):
@@ -1386,7 +1423,7 @@ def test_token_problem(ctx, kind, value):
     path, problem = evidence_path(ctx, rel)
     if problem:
         return problem
-    if not path.is_file():
+    if not is_file_quietly(path):
         return "{}: the file {} does not exist".format(kind, rel)
     if kind == "test" and rel.startswith(".drive/reviews/") and rel.endswith(".json"):
         _, error = load_json(path)
@@ -1427,7 +1464,7 @@ def verdict_problems(ctx, value, key, sub=None):
     path, problem = evidence_path(ctx, value)
     if problem:
         return [problem]
-    if not path.is_file():
+    if not is_file_quietly(path):
         return ["the verdict file {} does not exist".format(value)]
     data, error = load_json(path)
     if error:
@@ -1539,8 +1576,8 @@ def live_problems(ctx, value, key):
     path, problem = evidence_path(ctx, value)
     if problem:
         return [problem]
-    manifest = path / "proof.json" if path.is_dir() else path
-    if not manifest.is_file():
+    manifest = path / "proof.json" if is_dir_quietly(path) else path
+    if not is_file_quietly(manifest):
         return ["live:{} has no proof.json".format(value)]
     data, error = load_json(manifest)
     if error or not isinstance(data, dict):
@@ -1575,7 +1612,7 @@ def live_problems(ctx, value, key):
                 problems.append("{} has an artifact without a path".format(where))
                 continue
             target = realpath_loose(manifest.parent / str(artifact["path"]))
-            if not is_within(target, realpath_loose(ctx.root)) or not target.is_file():
+            if not is_within(target, realpath_loose(ctx.root)) or not is_file_quietly(target):
                 problems.append("{} names the artifact {}, which does not exist beside it".format(where, artifact["path"]))
             elif file_sha256(target) != str(artifact.get("sha256", "")).lower():
                 problems.append("{} records a sha256 for {} that does not match the file".format(where, artifact["path"]))
@@ -1666,7 +1703,7 @@ def check_status(ctx, f, mode):
                     problem = "commit {} does not exist in this repository".format(value)
             elif kind in ("proof", "shot", "review", "doc"):
                 path, problem = evidence_path(ctx, value)
-                if not problem and not path.exists():
+                if not problem and not exists_quietly(path):
                     problem = "{}: {} does not exist".format(kind, value)
                 elif not problem and kind == "shot":
                     images = [path] if path.is_file() else [p for p in path.rglob("*") if p.is_file()]
@@ -1675,7 +1712,7 @@ def check_status(ctx, f, mode):
             elif kind == "ops":
                 if not re.match(r"^https?://", value):
                     path, problem = evidence_path(ctx, value)
-                    if not problem and not path.exists():
+                    if not problem and not exists_quietly(path):
                         problem = "ops: {} is neither a URL nor an existing path".format(value)
             if problem:
                 f.fail(label, problem + ".")
@@ -4025,7 +4062,7 @@ def lost_marker_warning(data):
     verifying but .drive/local/active is gone, so every drive hook is inert (a git clean -X, or a marker deleted by hand).
     The stop is still allowed."""
     cwd = data.get("cwd")
-    if not cwd or not Path(cwd).is_dir():
+    if not cwd or not is_dir_quietly(cwd):
         return None
     try:
         start = Path(cwd).resolve()
@@ -5330,10 +5367,7 @@ class Guard:
                 if value == "/dev/null":
                     continue
                 path = None if self.unknowable(value) else self.resolve(value, cwd)
-                try:
-                    text = read_text(path) if path is not None and path.is_file() and path.stat().st_size < 256_000 else None
-                except OSError:
-                    text = None
+                text = small_file_text(path, 256_000) if path is not None else None
                 if text is None:
                     return ("{}. '{} < {}' runs a script the guard cannot read (missing, named through a variable, or 256 KB "
                             "or larger), so it is refused while a drive run is active. Run the commands directly, or pass a "
@@ -5413,7 +5447,7 @@ class Guard:
         if operand is not None:
             script_path = self.resolve(operand, cwd) if not self.unknowable(operand) else None
         text = code
-        if script_path is not None and script_path.is_file():
+        if script_path is not None and is_file_quietly(script_path):
             try:
                 text = read_text(script_path) if script_path.stat().st_size < 256_000 else ""
             except OSError:
@@ -5424,7 +5458,8 @@ class Guard:
         if self.role == "orchestrator":
             if text and EVIDENCE_MARKERS.search(text):
                 return ("{}. The {} it runs names reviewer evidence or the ledger; read evidence with cat or drive.py lint, "
-                        "and let the reviewer write it.".format(words, "script" if script_path else "code"))
+                        "and let the reviewer write it. To change a state file whose text mentions those paths, such as GOAL.md's plan, "
+                        "use the Edit tool.".format(words, "script" if script_path else "code"))
             return None
         if text and self.GIT_MUTATION_RE.search(text):
             return "{}. The {} run by {} runs a git command that changes the repository. Leave git to the orchestrator.".format(
@@ -5480,7 +5515,7 @@ class Guard:
             return None
         manifest = None
         for folder in [Path(cwd), *Path(cwd).parents]:
-            if (folder / "package.json").is_file():
+            if is_file_quietly(folder / "package.json"):
                 manifest = folder / "package.json"
                 break
             if realpath_loose(folder) == realpath_loose(self.root):
@@ -5510,8 +5545,8 @@ class Guard:
             elif not arg.startswith("-") and "=" not in arg:
                 targets.append(arg)
         path = self.resolve(makefile, folder) if makefile else next(
-            (folder / n for n in ("GNUmakefile", "makefile", "Makefile") if (folder / n).is_file()), None)
-        text = read_text(path) if path is not None and path.is_file() else None
+            (folder / n for n in ("GNUmakefile", "makefile", "Makefile") if is_file_quietly(folder / n)), None)
+        text = read_text(path) if path is not None and is_file_quietly(path) else None
         for target in targets:
             if re.match(r"(?i)^(deploy|publish|release|ship|push)\b", target):
                 return "{}, and no drive agent deploys or publishes. 'make {}' is blocked; the orchestrator runs it.".format(ROLE_WORDS[self.role], target)
@@ -5611,7 +5646,7 @@ class Guard:
                 return True, "{}. 'python -m json.tool' with an output file writes that file; let it print instead.".format(words)
         if "/" in argv[0] and base not in REVIEWER_COMMANDS and base not in project_words:
             path = self.resolve(argv[0], cwd)
-            if path.is_file():
+            if is_file_quietly(path):
                 return True, self.check_script(argv[0], cwd)
         if base not in REVIEWER_COMMANDS and base not in project_words:
             judged = " ".join(argv)
@@ -5725,7 +5760,7 @@ class Guard:
         cache = self.__dict__.setdefault("_shares", {})
         if text not in cache:
             run_main = main_worktree_root(self.root) or self.root
-            main = main_worktree_root(git_cwd) if Path(git_cwd).exists() else None
+            main = main_worktree_root(git_cwd) if exists_quietly(git_cwd) else None
             if main is None:
                 cache[text] = rel_in_root(Path(git_cwd), self.root) is not None
             else:
@@ -5754,7 +5789,7 @@ class Guard:
         if any(c.lower().startswith("alias.") for c in configs) or any(a.startswith("--config-env") for a in prefix):
             return "'git -c alias...' can rename any git command, so the guard refuses it; run the git command by its own name."
         if sub not in self.KNOWN_GIT:
-            alias = git_out(git_cwd if Path(git_cwd).is_dir() else self.root, "config", "--get", "alias." + sub)
+            alias = git_out(git_cwd if is_dir_quietly(git_cwd) else self.root, "config", "--get", "alias." + sub)
             if alias:
                 if alias.startswith("!"):
                     return self.check_command(alias[1:], cwd)
@@ -5803,7 +5838,7 @@ class Guard:
             if sub == "checkout" and "--" not in args and positional and positional[0] != current:
                 target = positional[0]
                 is_branch = git(self.root, "show-ref", "--verify", "--quiet", "refs/heads/" + target)[0] == 0
-                is_commit_only = len(positional) == 1 and commit_exists(self.root, target) and not (Path(cwd) / target).exists()
+                is_commit_only = len(positional) == 1 and commit_exists(self.root, target) and not exists_quietly(Path(cwd) / target)
                 if is_branch or is_commit_only:
                     return blocked("'git checkout {}'".format(target))
         if sub == "branch" and not self.git_read_only(sub, args):
@@ -5837,7 +5872,7 @@ class Guard:
             positional = [a for a in before if not a.startswith("-")]
             if not positional or positional[0] in ("HEAD", "@") or len(positional) > 1 or "--" in args:
                 return None
-            if not self.unknowable(positional[0]) and self.resolve(positional[0], git_cwd).exists():
+            if not self.unknowable(positional[0]) and exists_quietly(self.resolve(positional[0], git_cwd)):
                 return None
             return "git reset {}".format(" ".join(args)[:60])
         if sub == "update-ref":
@@ -5956,11 +5991,7 @@ class Guard:
     def patch_touches_frozen(self, raw, cwd):
         if self.unknowable(raw):
             return "The patch {} is named through a variable, so the guard cannot check it for frozen paths.".format(raw)
-        path = self.resolve(raw, cwd)
-        try:
-            text = read_text(path) if path.is_file() and path.stat().st_size < 1_000_000 else None
-        except OSError:
-            text = None
+        text = small_file_text(self.resolve(raw, cwd), 1_000_000)
         if text is None:
             if not self.frozen_list():
                 return None
@@ -6114,8 +6145,7 @@ class Guard:
     def check_script(self, raw, cwd):
         if self.unknowable(raw):
             return None
-        path = self.resolve(raw, cwd)
-        text = read_text(path) if path.is_file() and path.stat().st_size < 256_000 else None
+        text = small_file_text(self.resolve(raw, cwd), 256_000)
         if text is None:
             return None
         return self.check_command(text, cwd, script=True)
@@ -6183,7 +6213,7 @@ class Guard:
                         "branch is ever created; {} is blocked.".format(words, scratch_words(), what))
         in_tmp = is_tmp_path(git_cwd, exclude=self.root)
         if sub not in self.KNOWN_GIT:
-            alias = git_out(git_cwd if Path(git_cwd).is_dir() else self.root, "config", "--get", "alias." + sub)
+            alias = git_out(git_cwd if is_dir_quietly(git_cwd) else self.root, "config", "--get", "alias." + sub)
             if alias:
                 if alias.startswith("!"):
                     return self.check_command(alias[1:], cwd)

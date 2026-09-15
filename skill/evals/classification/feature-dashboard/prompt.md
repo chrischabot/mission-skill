@@ -3,8 +3,8 @@ name: classification-feature-dashboard
 description: A new dashboard in an existing product's admin area. Intake must classify it as shape feature, size M (a route, a query, and a screen with two unknowns), with existing-code, ui, and api among the traits. The run ends after intake.
 tags: [classification]
 expected_outcome: .drive/GOAL.md committed with shape feature, size M, traits including existing-code, ui, api; no new files under app/.
-max_turns: 40
-timeout_seconds: 900
+max_turns: 60
+timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
   Evaluation harness note, not from the user: the skill's scripts directory cannot be read from

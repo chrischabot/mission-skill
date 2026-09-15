@@ -3,8 +3,8 @@ name: classification-fix-deep-bug-hunt
 description: A vague "deep, annoying bug" in existing code whose cause is unknown. Intake must classify it as shape fix with no incident or perf variant, size M (S is accepted because this fixture is one small module), with existing-code confirmed. Quality words set nothing. The run ends after intake.
 tags: [classification]
 expected_outcome: .drive/GOAL.md committed with shape fix, no incident or perf variant, size M or S, existing-code among the traits; ledger code untouched.
-max_turns: 40
-timeout_seconds: 900
+max_turns: 60
+timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
   Evaluation harness note, not from the user: the skill's scripts directory cannot be read from

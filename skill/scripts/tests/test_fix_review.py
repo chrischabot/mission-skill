@@ -294,3 +294,81 @@ class InstallStatusTests(DriveTestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertNotIn("is enabled", result.stdout)
         self.assertIn("not listed", result.stderr)
+
+
+class LongLiteralTests(Hooks, DriveTestCase):
+    """The linkkeeper run on 2026-09-15: a main-thread `python3 - <<'PY'` edit whose string literals were longer than a file
+    name may be made the guard's path check raise OSError (ENAMETOOLONG), so a plain edit was refused as uncheckable."""
+
+    def setUp(self):
+        super().setUp()
+        self.repo = self.make_run()
+
+    def test_inline_code_with_a_literal_longer_than_a_file_name_is_judged_not_refused(self):
+        long_text = "the end-to-end check is a fresh clone started with one documented command " * 6
+        command = "python3 - <<'PY'\np = 'README.md'; s = open(p).read()\ns = s.replace('proj', '{}')\nprint(len(s))\nPY".format(long_text)
+        result = self.bash(self.repo, command)
+        self.assertAllowed(result)
+        self.assertNotIn("could not check", result.stderr)
+
+    def test_a_marker_delete_beside_a_long_literal_is_still_refused(self):
+        long_text = "x" * 400
+        command = "python3 - <<'PY'\nimport os\nnote = '{}'\nos.remove('.drive/local/active')\nPY".format(long_text)
+        result = self.bash(self.repo, command)
+        self.assertBlocked(result)
+        self.assertNotIn("could not check", result.stderr)
+
+    def test_inline_code_that_mentions_evidence_paths_points_at_the_edit_tool(self):
+        command = ("python3 - <<'PY'\np = '.drive/GOAL.md'; s = open(p).read()\n"
+                   "s = s.replace('- [ ] verify', '- [ ] verify · artifact: .drive/proofs/<key>/r<n>/verdict.json')\nPY")
+        result = self.bash(self.repo, command)
+        self.assertBlocked(result)
+        self.assertIn("use the Edit tool", result.stderr)
+
+
+class OverlongNameTests(Hooks, DriveTestCase):
+    """The sibling routes to the same ENAMETOOLONG refusal: every place hook-guard asks the filesystem about a command word,
+    a cd target, a git -C directory, or a code literal must answer "not found" for a name the OS rejects (a component over
+    255 characters or a path of 1,024 bytes or more), so the command gets the verdict a short missing name gets."""
+
+    ROLES = (None, "drive:implementer", "drive:verifier")
+    LONG_NAME = "n" * 256
+    LONG_PATH = "/".join(["d" * 100] * 10) + "/" + "f" * 20
+
+    def setUp(self):
+        super().setUp()
+        self.repo = self.make_run()
+
+    def assertSameVerdict(self, template, long_name, short_name):
+        self.assertGreater(len(long_name.encode("utf-8")), 255)
+        for agent in self.ROLES:
+            with self.subTest(agent=agent):
+                long_result = self.bash(self.repo, template.format(long_name), agent=agent)
+                short_result = self.bash(self.repo, template.format(short_name), agent=agent)
+                for result in (long_result, short_result):
+                    self.assertIn(result.returncode, (0, 2), result.stderr)
+                    self.assertNotIn("could not check", result.stderr)
+                self.assertEqual(long_result.returncode, short_result.returncode,
+                                 "long: {!r}; short: {!r}".format(long_result.stderr[:300], short_result.stderr[:300]))
+
+    def test_a_heredoc_literal_longer_than_a_file_name(self):
+        self.assertSameVerdict("python3 - <<'PY'\nx = '{}'\nprint(len(x))\nPY", self.LONG_NAME, "short-literal")
+
+    def test_a_python_script_operand_longer_than_a_file_name(self):
+        self.assertSameVerdict("python3 {}.py", self.LONG_NAME, "missing")
+
+    def test_a_bash_script_operand_longer_than_a_file_name(self):
+        self.assertSameVerdict("bash {}", self.LONG_NAME, "missing.sh")
+
+    def test_a_makefile_operand_longer_than_a_file_name(self):
+        self.assertSameVerdict("make -f {}", self.LONG_NAME, "missing.mk")
+
+    def test_a_cd_target_longer_than_a_file_name_before_npm_test(self):
+        self.assertSameVerdict("cd {} && npm test", self.LONG_NAME, "missing-dir")
+
+    def test_a_git_directory_longer_than_a_file_name(self):
+        self.assertSameVerdict("git -C {} status", self.LONG_NAME, "missing-dir")
+
+    def test_a_relative_path_longer_than_path_max(self):
+        self.assertEqual(len(self.LONG_PATH.encode("utf-8")), 1030)
+        self.assertSameVerdict("cat {}", self.LONG_PATH, "missing-dir/missing.txt")

@@ -1,10 +1,10 @@
 ---
 name: classification-build-mobile-app-serverless
-description: Greenfield native mobile app with a serverless backend and storage. Intake must classify it as shape build, size XL (a new product across two clients, the iOS app and the web app, plus a serverless backend: three surfaces, and an open problem), with ui, native-platform, api, auth, and data among its traits. The run ends after intake.
+description: "Greenfield native mobile app with a serverless backend and storage. Intake must classify it as shape build, size XL (a new product across two clients, the iOS app and the web app, plus a serverless backend: three surfaces, and an open problem), with ui, native-platform, api, auth, and data among its traits. The run ends after intake."
 tags: [classification]
 expected_outcome: .drive/GOAL.md committed with shape build, size XL, traits including ui, native-platform, api, auth, data; no Swift or backend code written.
-max_turns: 40
-timeout_seconds: 900
+max_turns: 60
+timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
   Evaluation harness note, not from the user: the skill's scripts directory cannot be read from

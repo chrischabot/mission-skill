@@ -138,7 +138,7 @@ hand-off is possible.
 | `skill/templates/` | every file a run writes into a project |
 | `skill/scripts/drive.py` | the state tool: init with the hygiene baseline, launch preflight, repository visibility, capabilities, start view, lint, end, the Stop, re-injection, guard, commit-record, and snapshot hooks with the provenance ledger, the floor guard, frozen tests, worktree landing, lesson checks and commits, and selfcheck |
 | `skill/hooks/hooks.json` | plugin hooks: the Stop gate, state re-injection after compaction or resume, per-agent write and git guards, records of the main thread's commits and of files changed while a reviewer runs, transcript-backed provenance for evidence reviewers write, and voiding of a review when a tracked file changed under it with no recorded edit or HEAD was rewritten |
-| `skill/evals/` | behavioural eval cases for `claude plugin eval`; no scored run exists yet, and `skill/evals/README.md` section 2 says what blocked the earlier attempts |
+| `skill/evals/` | behavioural eval cases for `claude plugin eval`; first scored on 2026-09-15; `skill/evals/README.md` section 2 says how to run it on a machine whose `~/.docker` holds symbolic links |
 | `research/` | the research reports and the synthesis the skill was built from |
 | `HANDOFF.md` | current state of the work, for whoever picks it up next |
 

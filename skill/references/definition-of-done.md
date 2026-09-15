@@ -89,6 +89,7 @@ meanings, so the lint can check them.
 <imperative subject>
 
 Claim: <one sentence that could be false>
+Cause: <the mechanism, never "flaky" or "timing">        (only for a defect)
 Evidence: <test path>::<test name> failed before the change (<one output line>) and passes after;
 <build, lint, and test commands> ok
 Security review: <verdict line and dispositions>        (only when auth applies)

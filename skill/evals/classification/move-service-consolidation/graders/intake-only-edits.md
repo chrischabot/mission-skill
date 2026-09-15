@@ -1,6 +1,6 @@
 ---
 type: tool_used
-tool: Write
+tool: Edit
 input_match: '"file_path":\s*"[^"]*/core/'
 min: 0
 max: 0

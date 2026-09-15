@@ -3,8 +3,8 @@ name: classification-move-service-consolidation
 description: Consolidating a separately deployed service from its own repository into the platform. Intake must classify it as shape move with the migration variant, size L (two repositories and a design unknown), with existing-code, multi-repo, and api among the traits. The run ends after intake.
 tags: [classification]
 expected_outcome: .drive/GOAL.md committed with shape move, variant migration, size L, traits including existing-code, multi-repo, api; nothing created under core/.
-max_turns: 40
-timeout_seconds: 900
+max_turns: 60
+timeout_seconds: 1800
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 append_system_prompt: >-
   Evaluation harness note, not from the user: the skill's scripts directory cannot be read from

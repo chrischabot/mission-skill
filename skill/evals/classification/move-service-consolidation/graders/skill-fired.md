@@ -1,6 +1,6 @@
 ---
 type: regex
 target: trace
-pattern: 'orchestrator of one run'
+pattern: 'XS fast path|drive\.py|drive:[a-z-]+|\.drive/'
 arm: with-only
 ---
