@@ -207,7 +207,7 @@ reported paths after its own test command passes; the full gates still run befor
 
 ## 8. Verification
 
-**Per package.** After the package is committed, build `.drive/handoffs/<unit>.md` (the unit is the
+**Per package.** After the package is committed, build `.drive/handoffs/<unit>.md`, or `<unit>-r<n>.md` for a later round (the unit is the
 package id) from the handoff template: the repository root as an absolute path, brief path, claim,
 commit range, changed files taken from git, wiring items, validation commands written as
 `cd <root> && <command>`, the lessons list, and the verdict schema path. It carries nothing from the

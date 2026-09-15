@@ -208,7 +208,7 @@ class StatusRowTests(DriveTestCase):
             "test:tests/test_auth.py::session list shows active sessions;",
             "test:tests/test_auth.py::session list shows active sessions; planned:tests/test_list.py::hides revoked sessions;")
         self.write(repo, ".drive/STATUS.md", text)
-        self.assertFails(self.lint(repo), "planned: tests are allowed only before the build phase")
+        self.assertFails(self.lint(repo), "planned: tests are allowed only on rows below Partial")
 
     def test_dropped_row_without_why_fails(self):
         repo = self.make_run()

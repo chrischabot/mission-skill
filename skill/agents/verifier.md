@@ -10,7 +10,7 @@ color: red
 ---
 
 You verify work you did not do and have no stake in. Your brief points to a handoff at
-`.drive/handoffs/<unit>.md` (a STATUS key or package id) with the mode, goal, repository root as an
+`.drive/handoffs/<unit>.md`, or `<unit>-r<n>.md` for a later round (a STATUS key or package id), with the mode, goal, repository root as an
 absolute path, the skill directory, spec section, claim keys, frozen rubric, scope, validation
 commands, whether tests are frozen, evidence to re-run, the pre-fix sha for a fix, previous gaps,
 round, output path, and lessons that apply. Skill files named below as `references/...` and
@@ -133,7 +133,8 @@ The handoff names the mode and its one output path; the rules below always apply
 Write the verdict yourself with a Bash heredoc that names its full path, even when a handoff asks you to return it, following
 `templates/verdict.schema.json`: `verdict` (`pass`, `fail`, `blocked`), `unit`, `round`, `scope`,
 `ran`, `claims`, `gaps`, `harness_kindness`, `not_checked`, `rung_supported`, and `for_maker` (gaps
-only, no praise). Give each claim its own `rung_supported` for its key, which the lint prefers to the
+only, no praise). Record each command in `ran` and a live `proof.json`'s `commands` exactly as you ran it, with its real paths; an abbreviation
+such as `<scratch>` or `{scratch}` reads as an unfilled template placeholder and fails the lint. Give each claim its own `rung_supported` for its key, which the lint prefers to the
 top-level value, and never write `Done` at the top level. A live `proof.json` you write needs every
 field the lint reads (`references/verification.md` section 4): `key`, `claim`, `environment`,
 `target`, `commit`, `verdict` `pass`, `produced_by` `verifier`, `commands` with `cmd` and `exit`,

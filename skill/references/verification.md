@@ -54,7 +54,9 @@ never writes tests, so the tests it runs were not written to pass its check.
 ## 2. The handoff contract
 
 Build `.drive/handoffs/<unit>.md` from `templates/handoff.md`, using files only, never any agent's
-message. `<unit>` is a STATUS key or a package id.
+message. `<unit>` is a STATUS key or a package id. A later round may name its handoff
+`.drive/handoffs/<unit>-r<n>.md`, with n the first number of its `round:` field, so earlier rounds'
+handoffs stay.
 
 | Field | Taken from |
 |---|---|

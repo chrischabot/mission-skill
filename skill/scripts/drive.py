@@ -45,6 +45,10 @@ PHASES = [
 ]
 PRE_BUILD_PHASES = {"intake", "archaeology", "research", "spec", "design", "test-plan", "decompose",
                     "reproduce", "diagnose", "inventory", "characterize", "content-plan", "plan"}
+# Phases that come after every test a row names should exist: harden and every phase PHASES lists after it, except the
+# pre-build phases and build's counterparts in other shapes (fix, draft, execute). A planned: token fails in them at
+# any rung; in build, verify, and integrate it fails only on a row at Partial or above.
+POST_TEST_PHASES = {p for p in PHASES[PHASES.index("harden"):] if p not in PRE_BUILD_PHASES} - {"fix", "draft", "execute"}
 SHAPES = ["build", "feature", "fix", "move", "publish", "report", "operate"]
 VARIANTS = {"fix/incident", "fix/perf", "move/migration", "move/refactor", "move/upgrade"}
 TRAITS = ["ui", "api", "auth", "data", "existing-code", "multi-repo", "external-systems",
@@ -919,6 +923,13 @@ def find_placeholders(text: str, include_yaml_fences=True):
     return found
 
 
+# A brace word in a recorded command, such as {scratch}/test_refute.py, stands in for a path the command really used.
+# ${VAR}, curl's -w %{http_code}, find's {}, and brace expansion with a comma ({a,b}) are real syntax and do not match.
+BRACE_PLACEHOLDER_RE = re.compile(r"(?<![$%])\{[A-Za-z_][A-Za-z0-9_ -]*\}")
+# The command fields a verdict (ran[].cmd) and a live proof.json (commands[].cmd) record.
+COMMAND_FIELD_RE = re.compile(r"^\$\.(?:ran|commands)\[\d+\]\.cmd$")
+
+
 def json_placeholders(data, path="$"):
     found = []
     if isinstance(data, dict):
@@ -929,6 +940,8 @@ def json_placeholders(data, path="$"):
             found.extend(json_placeholders(value, "{}[{}]".format(path, index)))
     elif isinstance(data, str):
         match = PLACEHOLDER_RE.search(data)
+        if not match and COMMAND_FIELD_RE.match(path):
+            match = BRACE_PLACEHOLDER_RE.search(data)
         if match:
             found.append((path, match.group(0)))
     return found
@@ -1725,9 +1738,12 @@ def check_status(ctx, f, mode):
                 f.fail(label, "is Dropped without why:. Record the reason.")
             continue
         rung = row.rung
-        if row.values("planned") and (rung >= LADDER.index("Partial") or mode == "final"
-                                      or (phase and phase not in PRE_BUILD_PHASES)):
-            f.fail(label, "planned: tests are allowed only before the build phase and are never evidence. Replace them with test: once the test exists.")
+        if row.values("planned"):
+            where = ("a {} row".format(row.status) if rung >= LADDER.index("Partial") else "lint --final" if mode == "final"
+                     else "the {} phase".format(phase) if phase in POST_TEST_PHASES else None)
+            if where:
+                f.fail(label, "planned: tests are allowed only on rows below Partial and before the harden phase, never at {}, "
+                              "and are never evidence. Replace them with test: once the test exists.".format(where))
         if rung >= LADDER.index("Scaffold") and not row.values("commit"):
             f.fail(label, "{} needs commit:.".format(row.status))
         if rung >= LADDER.index("Partial") and not tests:
@@ -2133,7 +2149,31 @@ def check_secrets(ctx, f):
                     break
 
 
+PROOF_ROUND_RE = re.compile(r"^r(\d+)$")
+
+
+def superseded_round_file(ctx, path, cited):
+    """True for a file under .drive/proofs/<key>/r<n>/ when a higher round exists for that key and no STATUS verdict:
+    token cites it: historical evidence a later round replaced, which nobody should rewrite to satisfy the lint."""
+    parts = path.relative_to(ctx.drive).parts
+    match = PROOF_ROUND_RE.match(parts[2]) if len(parts) >= 4 and parts[0] == "proofs" else None
+    if not match:
+        return False
+    try:
+        rounds = [int(m.group(1)) for m in (PROOF_ROUND_RE.match(p.name) for p in (ctx.drive / "proofs" / parts[1]).iterdir()
+                                             if p.is_dir()) if m]
+    except OSError:
+        return False
+    return int(match.group(1)) < max(rounds or [0]) and realpath_loose(path) not in cited
+
+
 def check_placeholders(ctx, f):
+    cited = set()
+    for row in (ctx.status.rows if ctx.status else []):
+        for value in row.values("verdict"):
+            resolved, _ = evidence_path(ctx, value)
+            if resolved is not None:
+                cited.add(resolved)
     for path in sorted(ctx.drive.rglob("*")):
         rel = path.relative_to(ctx.drive).parts
         if not path.is_file() or rel[0] in ("local", "runs") or path.suffix not in (".md", ".json"):
@@ -2148,8 +2188,12 @@ def check_placeholders(ctx, f):
             if error:
                 f.fail(ctx.rel(path), error + ".")
                 continue
+            if superseded_round_file(ctx, path, cited):
+                continue
             for where, token in json_placeholders(data)[:3]:
-                f.fail(ctx.rel(path), "{} still holds the template placeholder {}.".format(where, token))
+                advice = (" Record the command exactly as it ran, with the real path it used in place of {}.".format(token)
+                          if COMMAND_FIELD_RE.match(where) else "")
+                f.fail(ctx.rel(path), "{} still holds the template placeholder {}.{}".format(where, token, advice))
             continue
         for number, token in find_placeholders(text, include_yaml_fences=False)[:3]:
             f.fail(ctx.rel(path), "line {} still holds the template placeholder {}.".format(number, token))
@@ -2334,8 +2378,16 @@ def check_handoffs(ctx, f):
             if doc.section(section) is None:
                 f.fail(label, "is missing '## {}'.".format(section))
         unit = path.stem
-        if keys and unit not in keys and unit not in packages and unit != "final-audit":
-            f.fail(label, "is named for '{}', which is neither a STATUS key nor a package id.".format(unit))
+        known = keys | packages | {"final-audit"}
+        # A later verification round keeps earlier rounds' handoffs by naming its own <unit>-r<n>.md.
+        per_round = re.match(r"^(.+)-r(\d+)$", unit) if unit not in known else None
+        if keys and unit not in known and not (per_round and per_round.group(1) in known):
+            f.fail(label, "is named for '{}', which is neither a STATUS key nor a package id, nor one of those followed by "
+                          "-r<n> for a later round.".format(unit))
+        round_numbers = re.match(r"^(\d+)/\d+$", fields.get("round") or "")
+        if per_round and round_numbers and int(per_round.group(2)) != int(round_numbers.group(1)):
+            f.fail(label, "is named for round {} but its round: field is {}. Name a round's handoff <unit>-r<n>.md with n "
+                          "the round's first number.".format(int(per_round.group(2)), fields["round"]))
         for number, line in doc.sections.get("Claims", []):
             if line.startswith("### ") and keys and line[4:].strip() not in keys:
                 f.fail(label, "line {}: claim '{}' is not a STATUS key.".format(number, line[4:].strip()))
@@ -6761,10 +6813,20 @@ def cmd_hook_snapshot(args):
             break
         time.sleep(0.25)
     recorded = []
+    ledger = None
     for rel in candidates:
         if problems.get(rel) is None and record_evidence(root, rel, agent_type, data.get("agent_id"),
                                                          (before or {}).get("started"), (before or {}).get("started_ts"), transcript):
             recorded.append(rel)
+            continue
+        # Overlapping reviewer windows: another reviewer wrote this file and its own stop already recorded these bytes.
+        ledger = ledger_entries(root, "evidence") if ledger is None else ledger
+        digest = file_sha256(root / rel)
+        other = next((e for e in reversed(ledger) if digest and e.get("path") == rel and e.get("sha256") == digest
+                      and e.get("agent_id") and str(e.get("agent_id")) != str(data.get("agent_id"))), None)
+        if other:
+            gate_log(root, "PROVENANCE NOTE {} {} {}: already recorded for {} {}".format(
+                role, agent, rel, other.get("agent_type"), other.get("agent_id")))
         else:
             gate_log(root, "PROVENANCE REFUSED {} {} {}: {}".format(role, agent, rel, problems.get(rel) or "the file could not be read"))
     if recorded:

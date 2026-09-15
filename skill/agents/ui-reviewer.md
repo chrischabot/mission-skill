@@ -108,7 +108,8 @@ never guess which order you are in.
 
 Write `findings.json` per `templates/ui-findings.schema.json` and `verdict.json` per
 `templates/verdict.schema.json` beside it, or the verdict at the reviews path a close-check brief
-names. `blocking` and `major` findings become `blocking` gaps, `minor` becomes `should_fix`, and `note`
+names. Record each command in `ran` and a live `proof.json`'s `commands` exactly as you ran it, with its real paths; an abbreviation
+such as `<scratch>` or `{scratch}` reads as an unfilled template placeholder and fails the lint. `blocking` and `major` findings become `blocking` gaps, `minor` becomes `should_fix`, and `note`
 stays `note`; `rung_supported` stays at Local Proof unless the build under test was the deployed one, and each claim
 carries its own `rung_supported`. A live round's `proof.json` needs every field the lint reads
 (`references/verification.md` section 4): `key`, `claim`, `environment`, `target`, `commit`, `verdict`

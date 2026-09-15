@@ -1,0 +1,314 @@
+"""Severe tests for four defects a live drive run found on 2026-09-15.
+
+Each class names the defect it covers. Every test drives the real path (drive.py lint and hook-snapshot as subprocesses),
+and each class holds tests that fail against drive.py as it stood before the fix."""
+import json
+from pathlib import Path
+
+from helpers import SKILL, DriveTestCase, drive, proof_manifest, verdict
+
+KEY = "expired-token-is-rejected"
+LIST = "session-list-shows-active-sessions"
+PLANNED = "planned:tests/test_admin.py::admin revokes a session"
+
+
+class Cli:
+    """Subprocess helpers (not itself a TestCase)."""
+
+    def lint_cli(self, repo, *flags):
+        result = self.run_drive("lint", *flags, cwd=repo)
+        self.assertIn(result.returncode, (0, 1), result.stderr)
+        return [line for line in result.stdout.splitlines() if line.startswith("FAIL ")]
+
+    def failing(self, lines, *fragments):
+        return [line for line in lines if all(fragment in line for fragment in fragments)]
+
+    def snap(self, repo, phase, agent_id, agent="drive:verifier", transcript=None):
+        payload = {"hook_event_name": "SubagentStart" if phase == "start" else "SubagentStop", "cwd": str(repo),
+                   "agent_id": agent_id, "agent_type": agent}
+        if transcript is not None:
+            payload["agent_transcript_path"] = str(transcript)
+        result = self.run_drive("hook-snapshot", phase, stdin=json.dumps(payload))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def gate_log(self, repo):
+        path = Path(repo) / ".drive/local/gate.log"
+        return path.read_text() if path.exists() else ""
+
+
+class PlannedDuringBuildTests(Cli, DriveTestCase):
+    """Defect 1: a Missing row's planned: token failed in every phase after decompose, though its test is not written
+    until later in the build."""
+
+    RULE = "planned: tests are allowed only"
+
+    def plan_missing_row(self, repo):
+        text = (repo / ".drive/STATUS.md").read_text().replace("| Missing |  |", "| Missing | {} |".format(PLANNED))
+        self.write(repo, ".drive/STATUS.md", text)
+
+    def test_a_row_below_partial_may_stay_planned_through_build_verify_and_integrate(self):
+        repo = self.make_run()
+        self.plan_missing_row(repo)
+        for phase in ("build", "verify", "integrate", "live-proof", "fix", "draft", "execute", "test-plan"):
+            with self.subTest(phase=phase):
+                self.set_state(repo, phase=phase)
+                self.assertEqual(self.failing(self.lint_cli(repo), self.RULE), [])
+
+    def test_a_partial_row_with_a_planned_token_still_fails_during_build(self):
+        repo = self.make_run()
+        text = (repo / ".drive/STATUS.md").read_text().replace(
+            "test:tests/test_auth.py::session list shows active sessions;",
+            "test:tests/test_auth.py::session list shows active sessions; {};".format(PLANNED))
+        self.write(repo, ".drive/STATUS.md", text)
+        found = self.failing(self.lint_cli(repo), LIST, self.RULE)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("a Partial row", found[0])
+        self.assertIn("Replace them with test: once the test exists", found[0])
+
+    def test_a_planned_token_fails_in_harden_and_every_phase_after_the_tests_exist(self):
+        repo = self.make_run()
+        self.plan_missing_row(repo)
+        for phase in ("harden", "docs", "retro", "report", "cutover", "soak", "decommission", "design-qa", "deploy", "observe"):
+            with self.subTest(phase=phase):
+                self.set_state(repo, phase=phase)
+                found = self.failing(self.lint_cli(repo), "admin-can-revoke-sessions", self.RULE)
+                self.assertEqual(len(found), 1, found)
+                self.assertIn("the {} phase".format(phase), found[0])
+
+    def test_a_planned_token_fails_at_lint_final_even_during_build(self):
+        repo = self.make_run()
+        self.plan_missing_row(repo)
+        self.assertEqual(self.failing(self.lint_cli(repo), self.RULE), [])
+        found = self.failing(self.lint_cli(repo, "--final"), "admin-can-revoke-sessions", self.RULE)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("lint --final", found[0])
+
+
+class HandoffPerRoundTests(Cli, DriveTestCase):
+    """Defect 2: a later round's handoff named <unit>-r<n>.md was refused, so a round could not keep earlier handoffs."""
+
+    def handoff(self, repo, stem, round_field):
+        text = (Path(drive.TEMPLATES) / "handoff.md").read_text().replace("<unit>", KEY).replace(
+            "round: <n>/<K>", "round: {}".format(round_field))
+        rel = ".drive/handoffs/{}.md".format(stem)
+        self.write(repo, rel, text)
+        return rel
+
+    def naming_failures(self, lines, rel):
+        return self.failing(lines, rel + ":", "is named for")
+
+    def test_a_later_round_handoff_sits_beside_the_first_rounds(self):
+        repo = self.make_run()
+        (repo / ".drive/packages/export-api").mkdir(parents=True)
+        first = self.handoff(repo, KEY, "1/3")
+        second = self.handoff(repo, KEY + "-r2", "2/3")
+        package = self.handoff(repo, "export-api-r3", "3/3")
+        audit = self.handoff(repo, "final-audit-r2", "2/2")
+        lines = self.lint_cli(repo)
+        for rel in (first, second, package, audit):
+            with self.subTest(handoff=rel):
+                self.assertEqual(self.naming_failures(lines, rel), [])
+                self.assertEqual(self.failing(lines, rel + ":", "round must be written"), [])
+
+    def test_the_round_in_the_name_must_match_the_round_field(self):
+        repo = self.make_run()
+        rel = self.handoff(repo, KEY + "-r3", "2/3")
+        found = self.naming_failures(self.lint_cli(repo), rel)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("round 3 but its round: field is 2/3", found[0])
+
+    def test_an_unknown_unit_is_still_refused_with_or_without_a_round_suffix(self):
+        repo = self.make_run()
+        lines_for = {}
+        for stem in ("no-such-claim", "no-such-claim-r2", KEY + "-rtwo", KEY + "-r"):
+            lines_for[stem] = self.handoff(repo, stem, "2/3")
+        lines = self.lint_cli(repo)
+        for stem, rel in lines_for.items():
+            with self.subTest(stem=stem):
+                found = self.naming_failures(lines, rel)
+                self.assertEqual(len(found), 1, found)
+                self.assertIn("which is neither a STATUS key nor a package id", found[0])
+
+    def test_a_status_key_that_itself_ends_in_a_round_suffix_is_its_own_unit(self):
+        repo = self.make_run()
+        text = (repo / ".drive/STATUS.md").read_text().replace("admin-can-revoke-sessions", "retry-after-r2")
+        self.write(repo, ".drive/STATUS.md", text)
+        rel = self.handoff(repo, "retry-after-r2", "1/3")
+        self.assertEqual(self.naming_failures(self.lint_cli(repo), rel), [])
+
+
+class CommandPlaceholderTests(Cli, DriveTestCase):
+    """Defect 3: a verifier recorded a command with <scratch> in place of its temporary directory, then {scratch} to
+    dodge the lint. Both are refused; real shell braces are not."""
+
+    RAN_FILE = ".drive/proofs/{}/r2/verdict.json".format(KEY)
+
+    def placeholder_failures(self, repo, cmd, rel=None):
+        rel = rel or self.RAN_FILE
+        if rel.endswith("proof.json"):
+            manifest = proof_manifest(KEY)
+            manifest["commands"].append({"cmd": cmd, "exit": 0, "output": "r1/live.md"})
+            self.write(repo, rel, manifest)
+        else:
+            data = verdict(KEY, round_number=2)
+            data["ran"].append({"cmd": cmd, "exit": 0, "seconds": 1, "output": "r2/refute.txt"})
+            self.write(repo, rel, data)
+        return self.failing(self.lint_cli(repo), rel + ":", "template placeholder")
+
+    def test_an_angle_abbreviation_in_a_recorded_command_still_fails(self):
+        repo = self.make_run()
+        found = self.placeholder_failures(repo, "cd /repo && python3 -m pytest -q <scratch test_refute.py>")
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("$.ran[1].cmd", found[0])
+
+    def test_a_brace_abbreviation_in_a_recorded_command_fails_and_asks_for_the_real_path(self):
+        repo = self.make_run()
+        for cmd in ("cd /repo && python3 -m pytest -q -p no:cacheprovider {scratch}/test_refute.py",
+                    "cp tests/x.py {scratch dir}/x.py", "ls {tmp_dir}"):
+            with self.subTest(cmd=cmd):
+                found = self.placeholder_failures(repo, cmd)
+                self.assertEqual(len(found), 1, found)
+                self.assertIn("$.ran[1].cmd", found[0])
+                self.assertIn("real path", found[0])
+
+    def test_a_brace_abbreviation_in_a_live_proof_command_fails(self):
+        repo = self.make_run()
+        found = self.placeholder_failures(repo, "curl -s {base_url}/session", rel=".drive/proofs/{}/proof.json".format(KEY))
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("$.commands[1].cmd", found[0])
+
+    def test_real_shell_braces_in_a_recorded_command_pass(self):
+        repo = self.make_run()
+        for cmd in ("find . -name '*.pyc' -exec rm {} \\;", "find . -name x -exec echo {} +",
+                    "echo ${TMPDIR}/x && echo ${HOME}", "cp src/{auth,session}.py /tmp/x/",
+                    "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/session",
+                    "curl -s -d '{\"token\": \"expired\"}' http://localhost:8000/session",
+                    "python3 -c 'print({1: 2})'", "cat tests/test_auth.py"):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(self.placeholder_failures(repo, cmd), [])
+
+    def test_the_reviewer_agents_that_record_commands_are_told_to_record_real_paths(self):
+        for name in ("verifier", "ui-reviewer", "auditor"):
+            with self.subTest(agent=name):
+                text = " ".join((SKILL / "agents" / "{}.md".format(name)).read_text().split())
+                self.assertIn("exactly as you ran it, with its real paths", text)
+                self.assertIn("`<scratch>` or `{scratch}` reads as an unfilled template placeholder and fails the lint", text)
+
+
+class SupersededRoundPlaceholderTests(Cli, DriveTestCase):
+    """Defect 3, follow-up: a committed earlier round with a placeholder failed the lint forever, though a later round
+    replaced it and historical evidence should not be rewritten to satisfy a lint."""
+
+    def round_verdict(self, repo, key, number, cmd=None):
+        data = verdict(key, round_number=number)
+        if cmd:
+            data["ran"].append({"cmd": cmd, "exit": 0, "seconds": 1, "output": "r{}/refute.txt".format(number)})
+        rel = ".drive/proofs/{}/r{}/verdict.json".format(key, number)
+        self.write(repo, rel, data)
+        return rel
+
+    def placeholder_failures(self, repo, rel):
+        return self.failing(self.lint_cli(repo), rel + ":", "template placeholder")
+
+    def test_an_uncited_earlier_round_with_a_placeholder_is_skipped_when_a_later_round_exists(self):
+        repo = self.make_run()
+        first = self.round_verdict(repo, LIST, 1, "pytest <scratch>/test_refute.py")
+        second = self.round_verdict(repo, LIST, 2)
+        lines = self.lint_cli(repo)
+        self.assertEqual(self.failing(lines, first + ":", "template placeholder"), [])
+        self.assertEqual(self.failing(lines, second + ":", "template placeholder"), [])
+
+    def test_the_highest_round_with_a_placeholder_fails(self):
+        repo = self.make_run()
+        self.round_verdict(repo, LIST, 1)
+        second = self.round_verdict(repo, LIST, 2, "pytest <scratch>/test_refute.py")
+        self.assertEqual(len(self.placeholder_failures(repo, second)), 1)
+
+    def test_an_earlier_round_a_status_row_cites_still_fails(self):
+        repo = self.make_run()
+        first = self.round_verdict(repo, KEY, 1, "pytest {scratch}/test_refute.py")
+        self.round_verdict(repo, KEY, 2)
+        self.assertIn("verdict:" + first, (repo / ".drive/STATUS.md").read_text())
+        self.assertEqual(len(self.placeholder_failures(repo, first)), 1)
+
+    def test_an_earlier_round_that_does_not_parse_still_fails(self):
+        repo = self.make_run()
+        first = ".drive/proofs/{}/r1/verdict.json".format(LIST)
+        self.write(repo, first, "{not json\n")
+        self.round_verdict(repo, LIST, 2)
+        self.assertEqual(len(self.failing(self.lint_cli(repo), first + ":")), 1)
+
+    def test_reviews_json_is_checked_whatever_the_rounds(self):
+        repo = self.make_run()
+        rel = ".drive/reviews/2026-09-14-final-audit.json"
+        data = verdict("final-audit", claims=[KEY])
+        data["ran"].append({"cmd": "pytest {scratch}/x.py", "exit": 0})
+        self.write(repo, rel, data)
+        self.round_verdict(repo, KEY, 2)
+        self.assertEqual(len(self.placeholder_failures(repo, rel)), 1)
+
+
+class OverlappingReviewerProvenanceTests(Cli, DriveTestCase):
+    """Defect 4: when two reviewer windows overlapped, the second reviewer's stop logged PROVENANCE REFUSED for a verdict
+    the first had written and already recorded."""
+
+    REL = ".drive/proofs/{}/r2/verdict.json".format(KEY)
+
+    def overlap(self, repo):
+        self.snap(repo, "start", "agent-a")
+        self.snap(repo, "start", "agent-b")
+        self.write(repo, self.REL, verdict(KEY, round_number=2))
+        self.snap(repo, "stop", "agent-a", transcript=self.transcript(repo, self.REL, agent_id="agent-a"))
+
+    def stop_b(self, repo):
+        other = ".drive/proofs/{}/r2/pytest.txt".format(LIST)
+        self.snap(repo, "stop", "agent-b", transcript=self.transcript(repo, other, agent_id="agent-b"))
+
+    def test_the_second_reviewer_notes_a_verdict_the_first_recorded_and_the_lint_accepts_it(self):
+        repo = self.make_run()
+        self.overlap(repo)
+        self.stop_b(repo)
+        log = self.gate_log(repo)
+        self.assertIn("PROVENANCE verifier agent-a wrote {}".format(self.REL), log)
+        self.assertIn("PROVENANCE NOTE verifier agent-b {}: already recorded for drive:verifier agent-a".format(self.REL), log)
+        self.assertNotIn("PROVENANCE REFUSED", log)
+        writers = [e.get("agent_id") for e in drive.ledger_entries(repo, "evidence") if e.get("path") == self.REL]
+        self.assertEqual(writers, ["agent-a"])
+        text = (repo / ".drive/STATUS.md").read_text().replace(
+            "verdict:.drive/proofs/{}/r1/verdict.json".format(KEY), "verdict:" + self.REL)
+        self.write(repo, ".drive/STATUS.md", text)
+        lines = self.lint_cli(repo)
+        self.assertEqual(self.failing(lines, "provenance"), [])
+        self.assertEqual(self.failing(lines, "r2/verdict.json"), [])
+
+    def test_a_verdict_rewritten_after_the_first_reviewer_recorded_it_is_still_refused(self):
+        repo = self.make_run()
+        self.overlap(repo)
+        self.write(repo, self.REL, dict(verdict(KEY, round_number=2), for_maker="edited by hand after the review"))
+        self.stop_b(repo)
+        log = self.gate_log(repo)
+        self.assertIn("PROVENANCE REFUSED verifier agent-b {}".format(self.REL), log)
+        self.assertNotIn("PROVENANCE NOTE", log)
+
+    def test_a_file_no_reviewer_wrote_is_refused_for_both_overlapping_reviewers(self):
+        repo = self.make_run()
+        rel = ".drive/proofs/{}/r2/verdict.json".format(LIST)
+        self.snap(repo, "start", "agent-a")
+        self.snap(repo, "start", "agent-b")
+        self.write(repo, rel, verdict(LIST, round_number=2))
+        self.snap(repo, "stop", "agent-a", transcript=self.transcript(repo, ".drive/proofs/x/r2/a.txt", agent_id="agent-a"))
+        self.stop_b(repo)
+        log = self.gate_log(repo)
+        self.assertIn("PROVENANCE REFUSED verifier agent-a {}".format(rel), log)
+        self.assertIn("PROVENANCE REFUSED verifier agent-b {}".format(rel), log)
+        self.assertNotIn("PROVENANCE NOTE", log)
+
+    def test_the_same_reviewer_stopping_twice_does_not_note_its_own_entry(self):
+        repo = self.make_run()
+        self.snap(repo, "start", "agent-a")
+        self.write(repo, self.REL, verdict(KEY, round_number=2))
+        self.snap(repo, "stop", "agent-a", transcript=self.transcript(repo, self.REL, agent_id="agent-a"))
+        self.snap(repo, "stop", "agent-a", transcript=Path(str(self.home)) / "missing.jsonl")
+        log = self.gate_log(repo)
+        self.assertNotIn("PROVENANCE NOTE verifier agent-a {}".format(self.REL), log)
+        self.assertIn("PROVENANCE REFUSED verifier agent-a {}".format(self.REL), log)
