@@ -26,7 +26,7 @@ What must be true: <the spec's What would prove this wrong scenario>
 ## Scope
 range: <base sha>..<head sha>
 checkout: <absolute checkout path>
-owned paths: `<the package's ownership globs, or none>`
+owned paths: `<the package's ownership globs, or none>` (frozen tests unchanged per `drive.py freeze check` and the package's report.json are expected outside them)
 changed files:
 - <path from git diff --name-only on the range>
 

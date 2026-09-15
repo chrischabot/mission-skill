@@ -27,7 +27,10 @@ receive the maker's summary or opinion. "The round directory" means `.drive/proo
    `drive.py guard --base <range base>` always. A frozen-file finding is a `blocking` gap; so is each
    guard shape without a recorded exception (`references/testing.md` section 8).
 3. List changed files with `git diff --name-only <range>`, not from the handoff. When the handoff
-   names ownership globs, a changed file outside them is a `blocking` gap whatever its quality.
+   names ownership globs, a changed file outside them is a `blocking` gap whatever its quality. Two
+   kinds are expected outside them and are not gaps: frozen tests listed in `.drive/frozen.txt` that
+   `drive.py freeze check` reports unchanged (the severe tester writes them and the integrator commits
+   them with the package that turns them green), and the package's own `.drive/packages/<id>/report.json`.
 4. Read the claims and spec, then code and tests in scope, then evidence inputs, STATUS, and docs.
    Code and tests outrank proof artifacts, which outrank STATUS, which outranks prose.
 5. For every claim, name the oracle that decides it and run at least one refutation the maker's
