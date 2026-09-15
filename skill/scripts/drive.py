@@ -2038,6 +2038,10 @@ def check_state(ctx, f, mode):
     updated = parse_iso(fields.get("updated", ""))
     if fields.get("updated") and updated is None:
         f.fail(name, "updated must be an ISO UTC timestamp such as 2026-09-14T09:12:04Z.")
+    elif updated is not None and updated > now_utc() + dt.timedelta(minutes=15):
+        # A timestamp ahead of the clock would pass the staleness check below for as long as it stays ahead.
+        f.fail(name, "updated {} is ahead of the clock ({}). Write the time from `date -u +%Y-%m-%dT%H:%M:%SZ`, not an estimate.".format(
+            fields.get("updated"), iso_now()))
     commit = fields.get("commit", "")
     if commit:
         if not ctx.head:
@@ -4460,7 +4464,7 @@ SAFE_PY_MODULES = {"json", "sys", "re", "math", "collections", "itertools", "fun
                    "hashlib", "textwrap", "string", "pprint", "difflib", "decimal", "fractions", "csv", "glob", "fnmatch",
                    "unicodedata", "operator", "typing", "dataclasses", "enum", "heapq", "bisect", "copy", "numbers", "random",
                    "uuid", "base64", "binascii", "struct", "html", "shlex", "ipaddress", "calendar", "os", "os.path",
-                   "posixpath", "urllib.parse", "email.utils"}
+                   "posixpath", "urllib.parse", "email.utils", "sysconfig", "platform", "importlib.util", "sqlite3"}
 IMAGE_MODULES = {"PIL", "PIL.Image", "PIL.ImageDraw", "PIL.ImageOps", "PIL.ImageFont", "PIL.ImageChops", "PIL.ImageFilter",
                  "PIL.ImageStat", "PIL.ImageEnhance"}
 PY_BLOCKED_NAMES = {"exec", "eval", "compile", "__import__", "getattr", "setattr", "delattr", "globals", "locals", "vars",
@@ -4472,7 +4476,8 @@ PY_BLOCKED_ATTRS = {"modules", "system", "popen", "remove", "unlink", "rmdir", "
                     "pipe", "chroot", "setuid", "setgid", "load_module", "exec_module", "copyfile", "move", "rmtree",
                     "settrace", "setprofile", "execv", "execve", "execl", "execle", "execlp", "execlpe", "execvp", "execvpe",
                     "spawnl", "spawnle", "spawnlp", "spawnlpe", "spawnv", "spawnve", "spawnvp", "spawnvpe", "lchflags",
-                    "setxattr", "removexattr"}
+                    "setxattr", "removexattr", "enable_load_extension", "load_extension", "spec_from_file_location",
+                    "module_from_spec"}
 # A UI reviewer's pixel diff may use numpy on images it reads. These numpy and PIL names write files, map memory,
 # unpickle, fetch URLs into the working directory, compile, run code, or open a viewer, so they stay refused.
 NUMPY_MODULES = {"numpy"}
@@ -4524,6 +4529,30 @@ def python_code_reason(code, write_ok=None, extra_modules=()):
     def constant_output(first):
         return bool(write_ok and isinstance(first, ast.Constant) and isinstance(first.value, str) and write_ok(first.value))
 
+    # sqlite3 is allowed for probes on an in-memory database: a file path, an ATTACH, or VACUUM INTO would write a file.
+    uses_sqlite = any((isinstance(n, ast.Import) and any(a.name == "sqlite3" for a in n.names))
+                      or (isinstance(n, ast.ImportFrom) and n.module == "sqlite3") for n in ast.walk(tree))
+    if uses_sqlite:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr == "connect" and isinstance(node.value, ast.Name) \
+                    and bindings.get(node.value.id) == "sqlite3" and id(node) not in called:
+                return "it passes sqlite3.connect around instead of calling it"
+            if isinstance(node, ast.Name) and bindings.get(node.id) == "sqlite3.connect" and id(node) not in called:
+                return "it passes sqlite3.connect around instead of calling it"
+            if isinstance(node, ast.Call):
+                func = node.func
+                direct = isinstance(func, ast.Attribute) and func.attr == "connect" and isinstance(func.value, ast.Name) \
+                    and bindings.get(func.value.id) == "sqlite3"
+                imported = isinstance(func, ast.Name) and bindings.get(func.id) == "sqlite3.connect"
+                if direct or imported:
+                    memory = (len(node.args) == 1 and isinstance(node.args[0], ast.Constant) and node.args[0].value == ":memory:"
+                              and all(k.arg in ("timeout", "isolation_level", "check_same_thread", "detect_types")
+                                      for k in node.keywords))
+                    if not memory:
+                        return "it opens a SQLite database other than ':memory:'"
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                    and re.search(r"(?i)\battach\b|\bvacuum\s+into\b", node.value):
+                return "it attaches or writes a database file"
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:

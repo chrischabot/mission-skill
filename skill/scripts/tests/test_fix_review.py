@@ -372,3 +372,57 @@ class OverlongNameTests(Hooks, DriveTestCase):
     def test_a_relative_path_longer_than_path_max(self):
         self.assertEqual(len(self.LONG_PATH.encode("utf-8")), 1030)
         self.assertSameVerdict("cat {}", self.LONG_PATH, "missing-dir/missing.txt")
+
+
+class FutureStateTimestampTests(DriveTestCase):
+    """The linkkeeper run on 2026-09-15 wrote STATE.md `updated:` values hours ahead of the real clock, which the staleness
+    check compares against the latest code commit, so a future value would hide a stale STATE.md."""
+
+    def test_an_updated_time_ahead_of_the_clock_fails_the_lint(self):
+        import datetime as dt
+        import re
+        repo = self.make_run()
+        state = (repo / ".drive/STATE.md").read_text()
+        future = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.write(repo, ".drive/STATE.md", re.sub(r"(?m)^updated: .*$", "updated: " + future, state, count=1))
+        self.assertFails(self.lint(repo), "ahead of the clock")
+
+    def test_an_updated_time_a_few_minutes_ahead_is_tolerated(self):
+        import datetime as dt
+        import re
+        repo = self.make_run()
+        state = (repo / ".drive/STATE.md").read_text()
+        soon = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.write(repo, ".drive/STATE.md", re.sub(r"(?m)^updated: .*$", "updated: " + soon, state, count=1))
+        self.assertNoFailure(self.lint(repo), "ahead of the clock")
+
+
+class ReadOnlyProbeTests(Hooks, DriveTestCase):
+    """The linkkeeper run on 2026-09-15: the design architect lost eight tool calls to refusals of read-only probes
+    (an in-memory SQLite FTS5 check, sysconfig for the stdlib path, importlib.util.find_spec)."""
+
+    def setUp(self):
+        super().setUp()
+        self.repo = self.make_run()
+
+    def test_in_memory_sqlite_and_introspection_probes_are_allowed(self):
+        for code in ["import sqlite3; c = sqlite3.connect(':memory:'); c.execute(\"create virtual table t using fts5(x, tokenize='trigram')\"); print('ok')",
+                     "import sqlite3; print(sqlite3.sqlite_version)",
+                     "from sqlite3 import connect; print(connect(':memory:').execute('select 1').fetchone())",
+                     "import sysconfig; print(sysconfig.get_paths()['stdlib'])",
+                     "import importlib.util as u; print(bool(u.find_spec('yaml')))",
+                     "import platform; print(platform.python_version())"]:
+            for agent in ("drive:architect", "drive:verifier"):
+                with self.subTest(agent=agent, code=code):
+                    self.assertAllowed(self.bash(self.repo, "python3 -c \"{}\"".format(code.replace('"', '\\"')), agent=agent))
+
+    def test_sqlite_probes_that_could_write_a_file_are_refused(self):
+        for code in ["import sqlite3; sqlite3.connect('notes.db').execute('create table t(x)')",
+                     "import sqlite3; c = sqlite3.connect(':memory:'); c.execute(\"attach database 'x.db' as x\")",
+                     "import sqlite3; c = sqlite3.connect(':memory:'); c.execute(\"vacuum into 'copy.db'\")",
+                     "import sqlite3; c = sqlite3.connect(':memory:'); c.enable_load_extension(True)",
+                     "import sqlite3; f = sqlite3.connect; f('x.db')",
+                     "import sqlite3; sqlite3.connect('file:x.db', uri=True)",
+                     "import importlib.util as u; s = u.spec_from_file_location('m', 'm.py')"]:
+            with self.subTest(code=code):
+                self.assertBlocked(self.bash(self.repo, "python3 -c \"{}\"".format(code.replace('"', '\\"')), agent="drive:architect"))
