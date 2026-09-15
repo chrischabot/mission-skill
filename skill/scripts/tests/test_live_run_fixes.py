@@ -401,3 +401,40 @@ class WrappedAssertionShapeTests(DriveTestCase):
         self.assertNotIn("tests/test_a.py", out)
         self.assertNotIn("tests/test_b.py", out)
         self.assertIn("wrapped-assertion · tests/test_c.py", out)
+
+
+class InPlaceScriptTextTests(DriveTestCase):
+    """The linkkeeper run on 2026-09-15: the orchestrator's `sed -i "s#...#...#" .drive/STATUS.md` was refused because the
+    replacement text names a frozen test, as if the sed script were a file the command writes."""
+
+    def setUp(self):
+        super().setUp()
+        from test_adversarial_review import Hooks
+        self.hooks = Hooks()
+        self.repo = self.make_run()
+        self.write(self.repo, "tests/test_frozen_a.py", "def test_a():\n    assert True is not False\n")
+        self.assertEqual(self.run_drive("freeze", "add", "tests/test_frozen_a.py", cwd=self.repo).returncode, 0)
+
+    def bash(self, command):
+        import json
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": command},
+                   "cwd": str(self.repo), "session_id": "s-main", "tool_use_id": "toolu_inplace"}
+        return self.run_drive("hook-guard", stdin=json.dumps(payload))
+
+    def test_a_script_that_names_a_frozen_test_does_not_make_the_edit_a_frozen_write(self):
+        for command in ['sed -i "s#planned:tests/test_frozen_a.py::test_a#test:tests/test_frozen_a.py::test_a#" .drive/STATUS.md',
+                        'V=x && sed -i "s#planned:tests/test_frozen_a.py::test_a#verdict:$V#" .drive/STATUS.md',
+                        "sed -i -e 's#tests/test_frozen_a.py#done#' .drive/STATUS.md"]:
+            # perl -e code that names a frozen path stays refused: inline interpreter code could open that file.
+            with self.subTest(command=command):
+                result = self.bash(command)
+                self.assertNotIn("is frozen", result.stderr)
+
+    def test_an_in_place_edit_of_the_frozen_test_itself_is_still_refused(self):
+        for command in ["sed -i 's/True/False/' tests/test_frozen_a.py",
+                        "sed -i -e 's/True/False/' tests/test_frozen_a.py",
+                        "perl -pi -e 's/True/False/' tests/test_frozen_a.py"]:
+            with self.subTest(command=command):
+                result = self.bash(command)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("frozen", result.stderr)

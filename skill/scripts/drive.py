@@ -4462,6 +4462,30 @@ def frozen_block_reason(root, path, role, container=False, entries=None, run_con
             "changes it while an amendment is open.".format(hit))
 
 
+def in_place_targets(base, args):
+    """The files an in-place sed, perl, or ruby edit writes: never its script. A script comes from -e, --expression,
+    -f, or --file (whose values are skipped), or else is the first operand."""
+    value_flags = ("-e", "--expression", "-f", "--file") if base in ("sed", "gsed") else ("-e", "-E")
+    operands, scripted, skip, rest = [], False, False, False
+    for arg in args:
+        if skip:
+            skip = False
+            continue
+        if rest:
+            operands.append(arg)
+        elif arg == "--":
+            rest = True
+        elif arg in value_flags:
+            scripted, skip = True, True
+        elif arg.startswith(("--expression=", "--file=")):
+            scripted = True
+        elif arg.startswith("-") and arg != "-":
+            continue
+        else:
+            operands.append(arg)
+    return operands if scripted else operands[1:]
+
+
 def plain_operands(args):
     out, rest = [], False
     for arg in args:
@@ -6134,7 +6158,7 @@ class Guard:
             checks = [(a[3:], False) for a in args if a.startswith("of=")]
         elif base in ("sed", "gsed", "perl", "ruby") and any(
                 a.startswith("--in-place") or (a.startswith("-") and not a.startswith("--") and "i" in a[1:]) for a in args):
-            checks = [(t, False) for t in ops]
+            checks = [(t, False) for t in in_place_targets(base, args)]
         elif base in ("tar", "gtar", "bsdtar", "unzip"):
             extracting = base == "unzip" or "--extract" in args or any(re.match(r"^-?[a-wyzA-Z]*x", a) for a in args[:1]) \
                 or any(re.match(r"^-[a-zA-Z]*x", a) for a in args)
