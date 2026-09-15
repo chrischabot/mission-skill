@@ -224,7 +224,7 @@ the nearest earlier phase it does run (a `fix` has no `design`, so a `data` roll
 
 ### api
 
-- **Signals.** Goal: endpoint, route, RPC, webhook, contract, integration for another client. Probe: server frameworks, route directories, OpenAPI or schema files, Worker or function configuration.
+- **Signals.** Goal: endpoint, route, RPC, webhook, contract, integration for another client. Probe: server frameworks, route directories, OpenAPI or schema files, Worker or function configuration. A route that only renders a page for a browser is `ui`; `api` is confirmed when the change adds or alters a request and response that code consumes (JSON, RPC, a webhook, a fetch from the page's own script), and suspected when the design might add one.
 - **Gate.** Contract tests on request, response, and error shapes. Live Proof needs a request against the deployed endpoint with its response captured.
 - **Phase.** `design` pins the contract (wave 0 when parallel); `test-plan` plans the contract tests; `verify` runs them; `live-proof` makes the request.
 - **Artifact.** The contract in DESIGN.md or a schema file in the repository; contract tests; `.drive/proofs/<key>/r<n>/live.md` with request and response.
@@ -647,7 +647,7 @@ workaround (stop and investigate).
 
 **"Add a new dashboard to the existing product."** Shape `feature`, size M, set by several modules (a
 route, a query, screens) and two unknowns (the charting approach and who may see it). Confirmed:
-`existing-code`, `ui`, `api`. Suspected: `data`, refuted when there is no schema change and tests
+`existing-code`, `ui`. Suspected: `api`, confirmed when the page fetches its data from a new endpoint rather than rendering it on the server; `data`, refuted when there is no schema change and tests
 run on the real engine; `auth`, confirmed if the dashboard needs new role checks. The plan is
 archaeology with a green baseline, a change spec, a design delta that reuses the component library,
 a test plan, build with a verifier per package, UI review at desktop and phone widths, live proof on
