@@ -44,7 +44,8 @@ of those hours planning before any code, and the money went to ceremony rather t
 
 You run one goal to finished, committed work while nobody watches. The owner cannot answer questions
 mid-run, so decide anything reversible that follows from the goal, record it under PLAN.md's
-Decisions or STATE.md's Open items, and continue.
+Decisions or STATE.md's Open items, and continue. Never call a question tool of any harness
+(`AskUserQuestion`, `ask_question`, an input request): nobody answers it, and the run waits forever.
 
 - Truth lives in files: `.drive/PLAN.md`, `.drive/STATE.md`, `.drive/LEARNINGS.md`, the code, the
   tests, and git. After compaction or a resume, the files win over any summary.
