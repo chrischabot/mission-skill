@@ -259,7 +259,7 @@ class DriveTestCase(unittest.TestCase):
 
     # fixtures
     def transcript(self, repo, rel=None, agent_type="drive:verifier", agent_id="agent-test", tool="Bash", session="s-test",
-                   command=None, is_error=False, meta=True, tool_input=None):
+                   command=None, is_error=False, meta=True, tool_input=None, result_text=None):
         """Append one tool call to a subagent transcript shaped like Claude Code's: ~/.claude/projects/<project>/<session>/
         subagents/agent-<id>.jsonl, one JSON object per line (a user prompt, then assistant tool_use items with id, name,
         and input, each followed by a user tool_result), with agent-<id>.meta.json beside it. Returns the path."""
@@ -283,7 +283,8 @@ class DriveTestCase(unittest.TestCase):
                                                                      "input": tool_input, "caller": {"type": "direct"}}]}))
         lines.append(dict(base, type="user", uuid="r-{}".format(count), parentUuid="a-{}".format(count),
                           message={"role": "user", "content": [{"type": "tool_result", "tool_use_id": call_id,
-                                                                "content": "error" if is_error else "", "is_error": is_error}]}))
+                                                                "content": result_text if result_text is not None else ("error" if is_error else ""),
+                                                                "is_error": is_error}]}))
         with open(path, "a", encoding="utf-8") as handle:
             for line in lines:
                 handle.write(json.dumps(line) + "\n")

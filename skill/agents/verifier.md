@@ -130,7 +130,8 @@ The handoff names the mode and its one output path; the rules below always apply
 
 ## Verdict
 
-Write the verdict yourself with a Bash heredoc that names its full path, even when a handoff asks you to return it, following
+Write the verdict in a Bash call of its own and check it in a separate call: when a later command in the same call exits
+non-zero, the whole call is recorded as failed. Write the verdict yourself with a Bash heredoc that names its full path, even when a handoff asks you to return it, following
 `templates/verdict.schema.json`: `verdict` (`pass`, `fail`, `blocked`), `unit`, `round`, `scope`,
 `ran`, `claims`, `gaps`, `harness_kindness`, `not_checked`, `rung_supported`, and `for_maker` (gaps
 only, no praise). Record each command in `ran` and a live `proof.json`'s `commands` exactly as you ran it, with its real paths; an abbreviation

@@ -44,7 +44,8 @@ with no budget yet. Promote a row to Enforced in its own commit. -->
 ## Exceptions
 <!-- A suppression, skip, or relaxed rule allowed for a named path, including the skip of a quarantined
 flaky test (references/testing.md section 10, with the STATE.md ticket as the reason). An exception
-without a DECISIONS.md entry is unrecorded, and the guard blocks it. -->
+without a DECISIONS.md entry is unrecorded, and the guard blocks it. The path cell may name several
+paths or globs separated by commas; name the files rather than widening a glob. -->
 
 | rule | path | reason | undo | decision |
 |---|---|---|---|---|

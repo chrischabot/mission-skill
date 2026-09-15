@@ -539,7 +539,7 @@ def transcript_tool_calls(path, agent_id=None):
     # difference in how the hook and the transcript spell the id never discards every call.
     if agent_id and any(e.get("agentId") == agent_id for e in entries):
         entries = [e for e in entries if e.get("agentId") in (None, agent_id)]
-    calls, failed = [], set()
+    calls, failed = [], {}
     for entry in entries:
         message = entry.get("message") if isinstance(entry.get("message"), dict) else {}
         content = message.get("content")
@@ -552,8 +552,14 @@ def transcript_tool_calls(path, agent_id=None):
                 tool_input = item.get("input") if isinstance(item.get("input"), dict) else {}
                 calls.append((str(item.get("id")), str(item.get("name")), tool_input, entry.get("cwd")))
             elif item.get("type") == "tool_result" and item.get("is_error"):
-                failed.add(str(item.get("tool_use_id")))
-    out = [(name, tool_input, cwd) for call_id, name, tool_input, cwd in calls if call_id not in failed]
+                result = item.get("content")
+                if isinstance(result, list):
+                    result = "\n".join(str(part.get("text", "")) for part in result if isinstance(part, dict))
+                failed[str(item.get("tool_use_id"))] = str(result or "")
+    # A shell call that ran and exited non-zero (a later check in the same command failed) still wrote what it wrote;
+    # a call the guard refused, or that never ran, did not.
+    out = [(name, tool_input, cwd) for call_id, name, tool_input, cwd in calls
+           if call_id not in failed or (name in SHELL_TOOLS and failed[call_id].lstrip().startswith("Exit code"))]
     _TRANSCRIPT_CACHE[key] = out
     return out
 
@@ -7031,10 +7037,46 @@ def constraint_loosenings(old_text, new_text):
 
 
 def active_exceptions(text, decisions_text):
+    """(rule, path glob) for each recorded exception; a path cell may name several globs separated by commas."""
     rows = constraint_tables(text or "")["Exceptions"] if text else {}
     keys = decision_keys(decisions_text)
-    return [(rule.strip(), row.get("path", "").strip().strip("`")) for rule, row in rows.items()
-            if row.get("path") and row.get("reason") and decision_reference_ok(row.get("decision", ""), keys)]
+    out = []
+    for rule, row in rows.items():
+        if row.get("path") and row.get("reason") and decision_reference_ok(row.get("decision", ""), keys):
+            out.extend((rule.strip(), glob) for glob in (part.strip().strip("`").strip() for part in row["path"].split(",")) if glob)
+    return out
+
+
+BROAD_EXCEPTIONS = {"Exception", "BaseException", "AssertionError"}
+CATCH_WORD_RE = re.compile(r"\b(catch|except|rescue)\b")
+
+
+def python_swallowing_try_lines(text):
+    """Line numbers of Python try statements whose body asserts and whose broad handler (bare, Exception,
+    BaseException, or AssertionError) does not re-raise, so a failing assertion would be swallowed. A try with only
+    finally, or with a narrow handler, cannot swallow one. None when the text does not parse."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return None
+    try_types = (ast.Try,) + ((ast.TryStar,) if hasattr(ast, "TryStar") else ())
+    lines = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, try_types) or not node.handlers:
+            continue
+        asserts = any(isinstance(n, ast.Assert) or (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                                                    and n.func.attr.startswith(("assert", "fail")))
+                      for part in node.body for n in ast.walk(part))
+        if not asserts:
+            continue
+        for handler in node.handlers:
+            kinds = list(handler.type.elts) if isinstance(handler.type, ast.Tuple) else [handler.type]
+            broad = handler.type is None or any(
+                (isinstance(k, ast.Name) and k.id in BROAD_EXCEPTIONS) or (isinstance(k, ast.Attribute) and k.attr in BROAD_EXCEPTIONS)
+                for k in kinds)
+            if broad and not any(isinstance(n, ast.Raise) for part in handler.body for n in ast.walk(part)):
+                lines.add(node.lineno)
+    return lines
 
 
 def run_floor_guard(root, base="HEAD"):
@@ -7130,9 +7172,19 @@ def run_floor_guard(root, base="HEAD"):
                     if not values or max(values) > 2:
                         violations.append(("retry-added", "{}:{}".format(rel, number), "a retry was added or raised above 2"))
         if test:
+            swallowing = python_swallowing_try_lines("\n".join(new_lines)) if rel.endswith(".py") else None
             for index, (number, text) in enumerate(added):
-                if TRY_RE.match(text) and any(ASSERT_RE.search(line) for n, line in added[index + 1:index + 4] if n <= number + 3):
-                    violations.append(("wrapped-assertion", "{}:{}".format(rel, number), "an assertion was wrapped in try"))
+                if not TRY_RE.match(text):
+                    continue
+                if swallowing is not None:
+                    wrapped = number in swallowing
+                else:
+                    # Outside Python, a try with only finally cannot swallow an assertion; require a catch after it.
+                    wrapped = any(ASSERT_RE.search(line) for n, line in added[index + 1:index + 4] if n <= number + 3) \
+                        and any(CATCH_WORD_RE.search(line) for line in new_lines[number:number + 30])
+                if wrapped:
+                    violations.append(("wrapped-assertion", "{}:{}".format(rel, number),
+                                       "an assertion was wrapped in try with a handler that swallows its failure"))
         if runner_config:
             for number, text in added:
                 if SUITE_EXCLUDE_RE.search(text):

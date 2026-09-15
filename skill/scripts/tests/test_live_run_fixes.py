@@ -312,3 +312,92 @@ class OverlappingReviewerProvenanceTests(Cli, DriveTestCase):
         log = self.gate_log(repo)
         self.assertNotIn("PROVENANCE NOTE verifier agent-a {}".format(self.REL), log)
         self.assertIn("PROVENANCE REFUSED verifier agent-a {}".format(self.REL), log)
+
+
+class NonZeroShellWriteTests(DriveTestCase):
+    """The linkkeeper run on 2026-09-15: a verifier wrote its verdict with a heredoc and then, in the same Bash call, ran
+    `grep -c '[<>]'`, which exits 1 on no match; the call was recorded as failed and the verdict it wrote was refused."""
+
+    REL = ".drive/proofs/concurrent-api-requests-lose-no-writes/r1/verdict.json"
+
+    def setUp(self):
+        super().setUp()
+        self.repo = self.make_run()
+        self.write(self.repo, self.REL, verdict("concurrent-api-requests-lose-no-writes"))
+        self.command = "cat > {} <<'JSON'\n{{}}\nJSON\ngrep -c '[<>]' {}".format(self.REL, self.REL)
+
+    def test_a_write_in_a_call_that_ran_and_exited_non_zero_is_credited(self):
+        path = self.transcript(self.repo, command=self.command, agent_id="agent-v", is_error=True, result_text="Exit code 1\n0")
+        self.assertIsNone(drive.transcript_problem(self.repo, self.REL, str(path), "drive:verifier", "agent-v"))
+
+    def test_a_write_the_guard_refused_is_still_not_credited(self):
+        path = self.transcript(self.repo, command=self.command, agent_id="agent-v", is_error=True,
+                               result_text="PreToolUse:Bash hook error: the verifier writes only its proof round")
+        self.assertIsNotNone(drive.transcript_problem(self.repo, self.REL, str(path), "drive:verifier", "agent-v"))
+
+    def test_a_failed_write_tool_is_still_not_credited(self):
+        path = self.transcript(self.repo, self.REL, tool="Write", agent_id="agent-v", is_error=True, result_text="Exit code 1")
+        self.assertIsNotNone(drive.transcript_problem(self.repo, self.REL, str(path), "drive:verifier", "agent-v"))
+
+
+class WrappedAssertionShapeTests(DriveTestCase):
+    """The linkkeeper run on 2026-09-15 widened a wrapped-assertion exception to all of tests/ because the guard flagged
+    try/finally cleanup blocks, which cannot swallow an assertion, and an exception row could name only one glob."""
+
+    def repo_with(self, files):
+        from helpers import goal_md
+        self.count = getattr(self, "count", 0) + 1
+        repo = self.new_repo("wrapped-{}".format(self.count))
+        for rel, content in files.items():
+            self.write(repo, rel, content)
+        base = self.commit(repo, "chore: baseline")
+        self.write(repo, ".drive/GOAL.md", goal_md(base))
+        self.commit(repo, "drive(intake): session-auth")
+        return repo
+
+    def guard_after(self, rel, after, extra=None):
+        repo = self.repo_with(dict({rel: "def test_ratio():\n    assert ratio() == 0.5\n"}, **(extra or {})))
+        self.write(repo, rel, after)
+        return self.run_drive("guard", cwd=repo)
+
+    def test_cleanup_and_narrow_or_reraising_handlers_are_not_wrapped_assertions(self):
+        cases = {
+            "finally only": "def test_ratio():\n    conn = open_db()\n    try:\n        assert ratio(conn) == 0.5\n    finally:\n        conn.close()\n",
+            "narrow handler": "def test_ratio():\n    try:\n        assert ratio() == 0.5\n    except ValueError:\n        pass\n",
+            "re-raised": "def test_ratio():\n    try:\n        assert ratio() == 0.5\n    except Exception:\n        log('x')\n        raise\n",
+        }
+        for name, after in cases.items():
+            with self.subTest(case=name):
+                result = self.guard_after("tests/test_calc.py", after)
+                self.assertNotIn("wrapped-assertion", result.stdout)
+        js = self.repo_with({"tests/app.test.ts": "it('adds', () => {\n  expect(add(1, 2)).toEqual(3);\n});\n"})
+        self.write(js, "tests/app.test.ts", "it('adds', () => {\n  const s = start();\n  try {\n    expect(add(1, 2)).toEqual(3);\n  } finally {\n    s.stop();\n  }\n});\n")
+        self.assertNotIn("wrapped-assertion", self.run_drive("guard", cwd=js).stdout)
+
+    def test_swallowing_handlers_are_still_wrapped_assertions(self):
+        cases = {
+            "bare except": "def test_ratio():\n    try:\n        assert ratio() == 0.5\n    except:\n        print('ignored')\n",
+            "Exception": "def test_ratio():\n    try:\n        self.assertEqual(ratio(), 0.5)\n    except Exception:\n        print('ignored')\n",
+            "tuple with AssertionError": "def test_ratio():\n    try:\n        assert ratio() == 0.5\n    except (ValueError, AssertionError):\n        print('ignored')\n",
+        }
+        for name, after in cases.items():
+            with self.subTest(case=name):
+                self.assertIn("wrapped-assertion · ", self.guard_after("tests/test_calc.py", after).stdout)
+        js = self.repo_with({"tests/app.test.ts": "it('adds', () => {\n  expect(add(1, 2)).toEqual(3);\n});\n"})
+        self.write(js, "tests/app.test.ts", "it('adds', () => {\n  try {\n    expect(add(1, 2)).toEqual(3);\n  } catch (e) {\n    console.log(e);\n  }\n});\n")
+        self.assertIn("wrapped-assertion · ", self.run_drive("guard", cwd=js).stdout)
+
+    def test_an_exception_row_may_name_several_files(self):
+        swallow = "def test_ratio():\n    try:\n        assert ratio() == 0.5\n    except Exception:\n        print('ignored')\n"
+        start = "def test_ratio():\n    assert ratio() == 0.5\n"
+        constraints = ("# CONSTRAINTS · proj\n\n## Exceptions\n\n| rule | path | reason | undo | decision |\n|---|---|---|---|---|\n"
+                       "| wrapped-assertion | `tests/test_a.py`, `tests/test_b.py` | legacy probes | rewrite them | DECISIONS.md 2026-09-15-allow-legacy-probes |\n")
+        decisions = "# DECISIONS · proj\n\n## 2026-09-15 · Allow legacy probes\n- Decision: allow.\n- Undo: rewrite · reversal cost: low.\n- Narrows: none\n"
+        repo = self.repo_with({"tests/test_a.py": start, "tests/test_b.py": start, "tests/test_c.py": start,
+                               ".drive/CONSTRAINTS.md": constraints, ".drive/DECISIONS.md": decisions})
+        for name in ("test_a", "test_b", "test_c"):
+            self.write(repo, "tests/{}.py".format(name), swallow)
+        out = self.run_drive("guard", cwd=repo).stdout
+        self.assertNotIn("tests/test_a.py", out)
+        self.assertNotIn("tests/test_b.py", out)
+        self.assertIn("wrapped-assertion · tests/test_c.py", out)
