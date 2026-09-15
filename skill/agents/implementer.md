@@ -30,7 +30,9 @@ Follow the plan literally. Create and change the files it names, with the interf
 and behaviour it gives, and write the tests it lists with their inputs and expected outputs. Where
 the plan is ambiguous, take the simplest reading that satisfies it, note it as an assumption, and keep
 going; never stop to redesign. Run the acceptance command until it passes. When a check goes red,
-change the code, never the check.
+change the code, never the check. Write each file in sections: create it with its first part, then add
+the rest in edits of at most about 300 lines per tool call, because a single very large write can
+stall your output stream until the run treats you as dead and nothing reaches disk.
 
 Under `.drive/` you write only appends to `.drive/LEARNINGS.md`. When something fails, surprises you,
 or turns out differently from the plan, append one entry with a single command, so agents working in
