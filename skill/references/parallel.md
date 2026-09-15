@@ -245,7 +245,7 @@ wave's STATUS rows as `chore(drive): wave <n> status`.
 
 **Rounds.** A failing verdict returns each package whose claims hold a confirmed blocking gap, with the
 verdict's `for_maker` text. Limits, as
-SKILL.md section 5 sets them: `fix` 2; `feature` and `report` 3; `publish` 3 per phase gate; `build`
+`references/rigorous.md` section 5 sets them: `fix` 2; `feature` and `report` 3; `publish` 3 per phase gate; `build`
 3 per milestone plus 2 final; `move` 3 per phase and 4 at cutover; `operate` 2 per observed step. A blocking gap that returns after a fix needs an investigation record before
 more code changes. A dispute with a verifier goes once to `drive:auditor` with
 `.drive/reviews/<date>-dispute-<key>.md`; it rules `defect`, `not_a_defect`, or `rubric_ambiguous`,

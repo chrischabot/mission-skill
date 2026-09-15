@@ -1,4 +1,5 @@
 # STATE · <project> · <goal slug>
+mode: rigorous
 status: running
 phase: intake
 next: <one imperative sentence naming the real next action>

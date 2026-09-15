@@ -206,7 +206,7 @@ exits 0.
 | Suite narrowed | a deleted test file, a test file renamed or moved out of the runner's discovery pattern, `collect_ignore` or `--deselect` added, `-k "not ..."` in `addopts`, a narrowed `include` or `testMatch`, `passWithNoTests`, retries raised above 2, `fail_under` or a coverage floor lowered, a snapshot threshold such as `maxDiffPixels` raised, a gating suite whose test count fell against the baseline |
 | Test-only production branch | `NODE_ENV === 'test'`, `process.env.VITEST`, `process.env.JEST_WORKER_ID`, `"pytest" in sys.modules`, `XCTestConfigurationFilePath`, or a production literal copied from a fixture value |
 
-SKILL.md section 1 holds the rule for a red check: fix the code, never the check. If a constraint is
+`references/rigorous.md` section 1 holds the rule for a red check: fix the code, never the check. If a constraint is
 wrong, change its row in a commit of its own, `constraints: <rule> <old> to <new>`, with the measurement
 output and the reason, never in the commit that was failing. Tightening passes silently; loosening
 needs a DECISIONS.md entry in the same commit, and the final audit lists it.

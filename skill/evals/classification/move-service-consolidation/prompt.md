@@ -13,4 +13,4 @@ append_system_prompt: >-
   the run with one line naming that file. Do not start the phase that follows intake.
 ---
 
-/drive Move our notification gateway out of the separate notify-gateway project (checked out under external/notify-gateway) and into this platform as a core service, switch the platform's callers over to it, and retire the external project.
+/drive --rigorous Move our notification gateway out of the separate notify-gateway project (checked out under external/notify-gateway) and into this platform as a core service, switch the platform's callers over to it, and retire the external project.

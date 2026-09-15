@@ -6,7 +6,7 @@ whether this invocation resumes, archives, or starts a run; how to read the goal
 plan GOAL.md carries; which decisions you take on the owner's behalf and the one question you may
 ask; and how the classification changes when the work shows more than the goal did. Every trait has
 its own section whose heading is exactly the trait's name, so read only the traits you marked.
-SKILL.md section 3 is the short form of this file, and the two agree.
+`references/rigorous.md` section 3 is the short form of this file, and the two agree.
 
 Contents
 1. Where the run lives, resume, and paused runs
@@ -26,7 +26,7 @@ Contents
 
 ## 1. Where the run lives, resume, and paused runs
 
-SKILL.md section 2 step 0 has already settled that this repository is the run's home: the
+`references/rigorous.md` section 2 step 0 has already settled that this repository is the run's home: the
 repository that will hold the deliverable. A repository the goal names after "from" is the source of
 a move and never the home, even when it is the only repository the goal names: "move our AI gateway
 from the external repo into a core service of this platform" lives in the platform. A goal whose home
@@ -36,7 +36,7 @@ the directory is unrelated after all, go back to that step. Then, before you par
 
 | What you find | What it is | Do |
 |---|---|---|
-| `--resume` with `.drive/STATE.md` present, or `.drive/STATE.md` exists and GOAL.md's `goal:` line asks for this deliverable | a resume | Follow SKILL.md section 2, which runs `drive.py init --goal -` with GOAL.md's goal on stdin to re-create a missing `.drive/local/active` and record this session. Do not re-run intake or re-plan unless a discovery is logged. |
+| `--resume` with `.drive/STATE.md` present, or `.drive/STATE.md` exists and GOAL.md's `goal:` line asks for this deliverable | a resume | Follow `references/rigorous.md` section 2, which runs `drive.py init --goal -` with GOAL.md's goal on stdin to re-create a missing `.drive/local/active` and record this session. Do not re-run intake or re-plan unless a discovery is logged. |
 | `.drive/STATE.md` exists and the new goal names the same deliverable with more or different scope | a follow-up that changes the deliverable | Keep the run. Add a sub-goal through a dated re-plan (section 13). |
 | `.drive/STATE.md` exists for a different goal | another run's state | Do not overwrite it and do not ask. Continue with section 2; at the plan step, `drive.py init` moves the old run to `.drive/runs/<YYYY-MM-DD>-<old slug>/`. |
 | no `.drive/` | a fresh start | Continue with section 2. An XS run never creates `.drive/`. |
@@ -99,7 +99,7 @@ search the projects root (`DRIVE_PROJECTS_ROOT`, or else the directory that hold
 `P="${DRIVE_PROJECTS_ROOT:-$(if git rev-parse --git-dir >/dev/null 2>&1; then dirname "$(git rev-parse --show-toplevel)"; else pwd; fi)}"`, with
 `ls -d "$P"/*<name>* 2>/dev/null` and `grep -il '<name>' "$P"/*/README.md 2>/dev/null`. A hit is the
 run's repository when it is where the deliverable will live; no hit is the evidence for new work.
-Either way, return to SKILL.md section 2 step 0, which launches a background session in the existing
+Either way, return to `references/rigorous.md` section 2 step 0, which launches a background session in the existing
 repository, or creates `<projects root>/<slug>` for new work (`build`, or `publish` of a new site) and
 launches there, and then ends this session. Intake never continues in an
 unrelated repository and never writes `.drive/` there. When this repository is the home, record its

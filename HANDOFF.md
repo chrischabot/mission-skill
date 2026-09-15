@@ -1,12 +1,43 @@
 # drive: handoff
 
-This repository holds `/drive`, a Claude Code skill that takes a high-level goal and runs the whole
+This repository holds `/drive`, a Claude Code skill that takes a high-level goal and drives it to
+finished, committed work. Its default is a lean run: a Fable planner writes one implementation-ready
+plan, Sonnet implementers build it, an Opus reviewer checks and corrects each change, and what every
+agent learns compounds into the next plan. Rigorous mode, opt-in with `--rigorous`, runs the full
 process: intake and classification, research, specification, design, test planning, parallel
 implementation, independent adversarial verification, UI verification with vision, state files,
-failure investigation distilled into lessons, and compounding those lessons back into the skill. It
-scales from a one-line fix to a greenfield product without ceremony that does not pay for itself.
+failure investigation distilled into lessons, and a final audit.
 
 Last updated 2026-09-15 by the coordinating session, after the post-run fixes.
+
+## The lean default (2026-09-15)
+
+The owner made lean mode the default because the rigorous process spent its budget on ceremony. The
+linkkeeper build cost $359 and about seven hours with three hours of planning before any code, and a
+garderobe run spent about $45 in 75 minutes and produced no product code. The intended pattern was
+always the token-saving one, a big model planning, a cheap model coding, and a mid-size model
+reviewing, which should give output close to Fable's for roughly half the spend.
+
+- **Flow.** `drive:planner` (Fable, high) writes an implementation-ready `.drive/PLAN.md` after
+  consulting `.drive/LEARNINGS.md` and drive's lessons; `drive:implementer` (Sonnet, high) builds
+  packages in parallel from it literally; `drive:reviewer` (Opus, high) reviews each change against
+  the plan and fixes defects itself, returning only a fundamentally wrong package for one re-dispatch;
+  a final Opus review runs the suite and writes REPORT.md. The orchestrator (Fable, medium) dispatches
+  and commits. No spec, design, or test-plan files, no plan reviews, no ladder, verifiers, retro, or
+  final audit.
+- **Compounding.** Every agent appends Failed, Why, Verified (or guess), Rule, and Scope entries to
+  `.drive/LEARNINGS.md`, whose sections follow the five-stage memory progression in the source post.
+  `drive.py promote` sorts them and appends verified general rules to
+  `skill/references/lessons/learned.md`, deduplicated against every lessons file and committed alone;
+  lesson-check validates that file.
+- **Where it lives.** SKILL.md now holds only the lean flow; the previous SKILL.md body moved intact to
+  `skill/references/rigorous.md`. `drive.py` reads `mode:` from STATE.md or GOAL.md (a `.drive/` with
+  GOAL.md and no mode line is rigorous), and in lean mode the lint, the Stop gate, and `end` check only
+  STATE.md's status, next step, and timestamp (plus hygiene at `end`); the snapshot hook takes no tree
+  snapshots. `skill/scripts/tests/test_lean_mode.py` proves lean runs are not held by rigorous gates.
+- **Not yet proven.** No lean run has happened. The lean envelopes in `references/models.md` (small
+  fix under $5, feature under $25, build M under $80) are targets, and the two new eval cases
+  (`lean-feature-plan`, `lean-learning-entry`) have not been scored.
 
 ## Where things stand
 

@@ -53,7 +53,7 @@ while the marker exists.
 When the home is another existing repository, or the goal is new work while this directory holds a
 different project or no repository, do not start the run here: launch it in the right repository
 with the recipe "In another repository, or a new one" in section 2, end the turn with one line
-naming the session, and stop (SKILL.md section 2, step 0).
+naming the session, and stop (`references/rigorous.md` section 2, step 0).
 
 | Situation | Host | Notes |
 |---|---|---|
@@ -65,6 +65,10 @@ naming the session, and stop (SKILL.md section 2, step 0).
 A closed laptop lid sleeps the machine, and a sleeping machine runs nothing. Say so in STATE.md.
 
 ## 2. Launch recipes
+
+The recipes below launch a rigorous run at `--effort high`. A lean run, the default, uses the same
+commands with `--effort medium` and a goal without `--rigorous`; its budget line comes from the lean
+envelopes in `references/models.md`.
 
 The owner runs these from the repository root, and the orchestrator runs the background recipe
 itself when it launches a run elsewhere. They set the model, effort, and permission mode for the
@@ -215,7 +219,7 @@ done
 ```
 
 When the loop stops on the envelope, the next resume records the overrun in DECISIONS.md and
-narrows or stops, as SKILL.md section 9 says.
+narrows or stops, as `references/rigorous.md` section 9 says.
 
 **Resume.** Continue the same conversation by its id, never its name:
 `claude --resume <session id> --bg --model claude-fable-5-1 --effort high --permission-mode auto --settings "$DRIVE_SETTINGS" "/drive --resume"`.
@@ -333,7 +337,7 @@ Set `blocked` only for a stop condition, only after every independent piece of w
 only with REPORT.md written; put the stop-condition token, then the single thing, who can unblock it,
 and the default being taken meanwhile on the "Blocked on" line, and the one question in plain text at the end of your turn. Set
 `done` only when every row is Done or Dropped, after the final audit passes and `lint --final` is
-green, then run `$DRIVE end`. Set `stopped` when the run ends short of Done for one of SKILL.md
+green, then run `$DRIVE end`. Set `stopped` when the run ends short of Done for one of `references/rigorous.md`'s
 section 9's stop conditions: every piece of work that does not depend on the blocker is finished,
 every row below Done carries its reason (an Open failure, the Blocked on line, a `why:` token, or a
 DECISIONS.md `Narrows:` line naming it), the retro exists, and REPORT.md opens with "Stopped
@@ -458,7 +462,7 @@ Run this at every start, including the first leg of a headless run.
   depends on how this Markdown tokenizes, so do not count on the re-attached copy reaching the end of
   section 6. The
   SessionStart hook (`drive.py hook-reinject`, on compaction and resume) prints the start view and
-  then SKILL.md's section 1, standing rules, section 6, and section 7 to the end; sections 2 to 5 come
+  then SKILL.md's standing rules and `references/rigorous.md` section 1, section 6, and section 7 to the end (in a lean run, SKILL.md from its Mode section on, without section 2); sections 2 to 5 come
   back only from that partial copy or a re-read. Re-read STATE.md, GOAL.md, and `.drive/packages/index.md` before acting;
   never trust the summary over the files.
 - Send heavy reading to subagents and receive status lines and paths. Read large files in ranges.

@@ -201,7 +201,7 @@ missing input named. Mid-run milestone lines take one form:
 
 **A run that ends short of Done.** Device-only claims, a preview-only site, a bug that would not
 reproduce, a spent budget, and a missing credential are ordinary endings, and each has an honest
-status. When a stop condition in SKILL.md section 9 holds and every piece of work that does not
+status. When a stop condition in `references/rigorous.md` section 9 holds and every piece of work that does not
 depend on it is finished, the retro is committed, and the final audit has run where one is required,
 set `status: stopped`.
 `drive.py lint --final` passes a stopped run when:

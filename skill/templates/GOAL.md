@@ -1,4 +1,5 @@
 # GOAL · <goal slug>
+mode: rigorous
 goal: "<verbatim prompt>"
 live means: <deployed host, device and backend, clean install, or out of scope: reason>
 budget: <turns> turns · <subagents> subagents · <wall clock> · <usd envelope>

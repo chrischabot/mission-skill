@@ -13,4 +13,4 @@ append_system_prompt: >-
   the run with one line naming that file. Do not start the phase that follows intake.
 ---
 
-/drive Find this deep, annoying bug and fix it: the weekly totals report is occasionally one entry off, usually in weeks where someone logged time late on a Sunday night.
+/drive --rigorous Find this deep, annoying bug and fix it: the weekly totals report is occasionally one entry off, usually in weeks where someone logged time late on a Sunday night.

@@ -34,7 +34,7 @@ land mid-step, and a small, recently written STATE.md is one of the files that r
 ## 2. The `.drive/` layout
 
 All run state lives in `.drive/` at the root of the repository the session started in, committed on
-the current branch with the code. SKILL.md section 2 step 0 moves a run whose goal belongs to another
+the current branch with the code. `references/rigorous.md` section 2 step 0 moves a run whose goal belongs to another
 repository before anything is written. `.drive/local/` is gitignored and holds `active` (the marker
 the hooks test), `baseline.json` (written by `drive.py init` for a new run, and at a resume when it is missing: HEAD, the current branch, the real path
 of every linked worktree, every local branch, every uncommitted path outside `.drive/` apart from
@@ -305,7 +305,7 @@ what else is under way goes in `next:` and "In flight".
 `running` and `verifying` keep the Stop gate closed, and no other status opens it by being declared:
 `done` and `stopped` need `lint --final` to pass; `blocked` needs the Blocked on line to begin with
 one of `budget:`, `impossible:`, `destructive:`, `credentials:`, `payment:`, `legal:`, `account:`,
-`two-diagnoses:`, or `soak:` followed by the condition in words (the stop conditions in SKILL.md
+`two-diagnoses:`, or `soak:` followed by the condition in words (the stop conditions in `references/rigorous.md`
 section 9), and REPORT.md to say "Stopped because", where `budget:` counts only once maker spawns
 reached the subagent figure on GOAL.md's budget line or a DECISIONS.md entry added since intake has a `Decision:` line that begins with `Stop` or `Narrow` and names the budget (an entry counts as added when its heading and body were not at intake, so a reused heading still counts), and `credentials:` must name
 the secret as an uppercase identifier containing an underscore or ending in `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `PAT`, `CREDENTIALS`, or `CERT` (`credentials: CLOUDFLARE_API_TOKEN`), or as a name of two or more letters in backquotes or double quotes, so `credentials: none`, `TBD`, `TODO`, `N/A`, and `UNKNOWN` are refused; or the Blocked on line to begin

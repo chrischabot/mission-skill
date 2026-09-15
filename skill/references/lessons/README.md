@@ -9,6 +9,7 @@ store is in `references/lessons.md`.
 | File | Holds | Cap |
 |---|---|---|
 | `general.md` | rules about how to run projects, one entry per rule in the lesson template | 60 entries or 16,000 characters |
+| `learned.md` | rules lean runs verified and promoted with `drive.py promote`, each with Because, Verified by, Source, and Seen, appended and committed alone without the dedupe and audit below | 80 entries |
 | `retired.md` | tombstones for rules merged, superseded, retired as unused, or retired because their eval passes without drive | none |
 | `rejected.md` | candidate rules the auditor rejected, so a false lesson is not proposed twice | none |
 

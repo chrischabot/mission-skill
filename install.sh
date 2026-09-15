@@ -118,11 +118,11 @@ cat <<EOF
 Per-run settings (not applied anywhere; pass them to each run with --settings):
   DRIVE_SETTINGS='$DRIVE_SETTINGS'
 
-Background run, from the repository root:
-  claude --bg --name drive-<slug> --model claude-fable-5-1 --effort high --permission-mode auto --settings "\$DRIVE_SETTINGS" "/drive <goal>"
+Background run, from the repository root (lean by default; for a rigorous run use --effort high and "/drive --rigorous <goal>"):
+  claude --bg --name drive-<slug> --model claude-fable-5-1 --effort medium --permission-mode auto --settings "\$DRIVE_SETTINGS" "/drive <goal>"
 
 Headless run (add a finite background-wait ceiling of three hours rather than 0, which waits forever):
-  env CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=10800000 claude -p "/drive <goal>" --model claude-fable-5-1 --effort high \\
+  env CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=10800000 claude -p "/drive <goal>" --model claude-fable-5-1 --effort medium \\
     --permission-mode auto --settings "\$DRIVE_SETTINGS" --max-turns <n> --max-budget-usd <usd>
 
 After intake, the run checks its own launch with: python3 ~/.claude/skills/drive/scripts/drive.py preflight

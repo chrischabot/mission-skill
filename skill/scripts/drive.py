@@ -56,10 +56,15 @@ TRAITS = ["ui", "api", "auth", "data", "existing-code", "multi-repo", "external-
           "perf", "research-needed", "deploy-infra", "ai-llm", "large-surface", "generated-code"]
 SIZES = ["XS", "S", "M", "L", "XL"]
 CHECKERS = {"orchestrator", "researcher", "architect", "designer", "implementer", "writer", "verifier", "severe-tester",
-            "security-reviewer", "ui-reviewer", "grader", "investigator", "auditor"}
+            "security-reviewer", "ui-reviewer", "grader", "investigator", "auditor", "planner", "reviewer"}
+# A run is lean (PLAN.md, a Sonnet build, an Opus review) unless the owner asked for rigorous mode. The mode decides which
+# checks the lint and the Stop gate apply: a lean run is checked only for a STATE.md with a status, a next step, and no
+# timestamp ahead of the clock.
+MODES = ("lean", "rigorous")
+MODE_LINE_RE = re.compile(r"^mode:\s*(lean|rigorous)\s*$", re.M)
 TOKEN_TYPES = ["test", "severe", "verdict", "proof", "shot", "live", "ops", "review", "commit",
                "doc", "why", "planned", "sub"]
-# The only words a self-declared `blocked` status may begin its Blocked on line with (SKILL.md section 9).
+# The only words a self-declared `blocked` status may begin its Blocked on line with (references/rigorous.md section 9).
 BLOCKED_TOKENS = ("budget:", "impossible:", "destructive:", "credentials:", "payment:", "legal:", "account:",
                   "two-diagnoses:", "soak:")
 HOOK_ARG_RE = re.compile(r"^hook-(stop|guard|post|snapshot|reinject)$")
@@ -84,7 +89,7 @@ KNOWN_DRIVE_ENTRIES = {
     "GOAL.md", "STATE.md", "STATUS.md", "DECISIONS.md", "LESSONS.md", "CONSTRAINTS.md",
     "capabilities.json", "capability-map.md", "SPEC.md", "DESIGN.md", "TESTPLAN.md", "RESEARCH.md",
     "HUNT.md", "MIGRATION.md", "how-it-works.md", "REPORT.md", "handoffs", "rubrics", "packages",
-    "proofs", "reviews", "investigations", "local", "runs", "content-plan",
+    "proofs", "reviews", "investigations", "local", "runs", "content-plan", "PLAN.md", "LEARNINGS.md",
 }
 SECRET_PATTERNS = [
     ("an API key starting with sk-", re.compile(r"\bsk-(?:ant-|proj-|live-)?[A-Za-z0-9_\-]{20,}")),
@@ -1230,7 +1235,8 @@ class State:
 
     @property
     def in_flight(self):
-        return self.resume.get("in flight", "")
+        # A rigorous STATE.md carries In flight under Resume here; a lean one carries an in flight: header line.
+        return self.resume.get("in flight", "") or self.fields.get("in flight", "")
 
     def ledger(self):
         return parse_table(self.doc.section("Workaround ledger") or [])
@@ -3448,6 +3454,40 @@ def check_floor(ctx, f):
                "DECISIONS.md entry.".format(rule, where, message, base[:7]))
 
 
+def run_mode(root):
+    """The run's mode: the `mode:` header line of STATE.md, then of GOAL.md. A .drive/ with neither line is rigorous when it
+    holds GOAL.md, because every run written before lean mode existed has GOAL.md and no mode line; otherwise it is lean."""
+    drive = Path(root) / ".drive"
+    for name in ("STATE.md", "GOAL.md"):
+        text = read_text(drive / name)
+        if text:
+            match = MODE_LINE_RE.search(text.split("\n## ", 1)[0])
+            if match:
+                return match.group(1)
+    return "rigorous" if (drive / "GOAL.md").is_file() else "lean"
+
+
+def check_lean_state(ctx, f):
+    """Everything the lint checks in a lean run: STATE.md exists with a known status and a next step, and its updated: time is
+    not ahead of the clock. The rest of the lint belongs to rigorous mode."""
+    name = "STATE.md"
+    state = ctx.state
+    if state is None:
+        f.fail(name, "is missing. Write it from templates/lean/STATE.md with the real next step.")
+        return
+    status = state.fields.get("status", "")
+    if not status:
+        f.fail(name, "is missing the 'status:' line.")
+    elif status not in RUN_STATUSES:
+        f.fail(name, "status '{}' must be one of {}.".format(status, ", ".join(RUN_STATUSES)))
+    if not state.fields.get("next"):
+        f.fail(name, "is missing the 'next:' line; write the real next step.")
+    updated = parse_iso(state.fields.get("updated", ""))
+    if updated is not None and updated > now_utc() + dt.timedelta(minutes=15):
+        f.fail(name, "updated {} is ahead of the clock ({}). Write the time from `date -u +%Y-%m-%dT%H:%M:%SZ`, not an estimate.".format(
+            state.fields.get("updated"), iso_now()))
+
+
 def run_lint(root, mode="base", gate=None, run_commands=True, sub=None, suite_timeout=SUITE_TIMEOUT):
     ctx = Ctx(root)
     ctx.run_commands = run_commands
@@ -3456,6 +3496,10 @@ def run_lint(root, mode="base", gate=None, run_commands=True, sub=None, suite_ti
     f = Findings()
     if not ctx.drive.is_dir():
         f.fail(".drive", "does not exist in {}.".format(ctx.root))
+        return ctx, f
+    ctx.mode = run_mode(ctx.root)
+    if ctx.mode == "lean":
+        check_lean_state(ctx, f)
         return ctx, f
     check_goal(ctx, f, mode)
     check_state(ctx, f, mode)
@@ -3511,11 +3555,45 @@ def cmd_lint(args):
 # start, init, end
 
 
+def cap_warning(root, state):
+    counter = stop_counter(root)[1]
+    consecutive, cap = int(counter.get("consecutive", 0) or 0), int(counter.get("cap", 0) or 0)
+    if state.status in GATE_CLOSED and cap and consecutive >= cap:
+        return ("Warning: the last turn ended while the Stop gate was still blocking ({} consecutive blocked stops, "
+                "CLAUDE_CODE_STOP_HOOK_BLOCK_CAP {}). Claude Code's block cap ended that turn, not the run; "
+                ".drive/local/gate.log has the blocks. Continue from next:.".format(consecutive, cap))
+    return None
+
+
+def lean_start_view(root):
+    ctx, f = run_lint(root, "stop")
+    out = ["DRIVE · START · {} · lean".format(root)]
+    if ctx.state:
+        out.append("")
+        out.extend(line for _, line in ctx.state.doc.header if re.match(r"^[a-z][a-z ]*:", line))
+        items = ctx.state.doc.bullets("Open items")
+        out.append("")
+        out.append("Open items ({}):".format(len(items)))
+        out.extend(line for _, line in items)
+        warning = cap_warning(root, ctx.state)
+        if warning:
+            out.extend(["", warning])
+    else:
+        out.append("STATE.md is missing.")
+    out.append("PLAN.md: {}".format("present" if (ctx.drive / "PLAN.md").is_file() else "not written yet"))
+    fails = [i for i in f.items if i["level"] == "fail"]
+    out.append("Lint (lean checks): {} failure(s)".format(len(fails)))
+    out.extend("- " + line for line in f.lines())
+    return "\n".join(out)
+
+
 def start_view(root):
     root = Path(root)
     drive = root / ".drive"
     if not drive.is_dir():
         return "No drive run in {}.".format(root)
+    if run_mode(root) == "lean":
+        return lean_start_view(root)
     ctx, f = run_lint(root, "stop")
     out = ["DRIVE · START · {}".format(root)]
     if ctx.state:
@@ -3644,6 +3722,22 @@ def same_goal(old_goal, new_text, new_slug):
     return old_goal.slug in (new_slug, slugify(new_text, 50))
 
 
+class LeanRun:
+    """A lean run's identity, read from STATE.md: the title `STATE · <project> · <slug>` and the `goal:` header line."""
+
+    def __init__(self, text: str):
+        state = State(text)
+        self.fields = state.fields
+        parts = [p.strip() for p in state.doc.title.split("·")]
+        self.slug = parts[-1] if len(parts) >= 3 else ""
+        self.size = None
+
+
+# Project memory that outlives any one run: archiving a run for another goal leaves it in place.
+PERSISTENT_DRIVE_ENTRIES = {"local", "runs", "LEARNINGS.md"}
+LEAN_FILES = ["STATE.md", "PLAN.md", "LEARNINGS.md"]
+
+
 def archive_run(root, old_goal):
     """Move the tracked state of a run for a different goal to .drive/runs/<date>-<slug>/."""
     drive = Path(root) / ".drive"
@@ -3655,7 +3749,7 @@ def archive_run(root, old_goal):
     while dest.exists():
         dest = runs / "{}-{}-{}".format(date, slug, suffix)
         suffix += 1
-    evidence = (drive / "GOAL.md").is_file() and bool(old_goal.slug)
+    evidence = ((drive / "GOAL.md").is_file() or (drive / "STATE.md").is_file()) and bool(old_goal.slug)
     ok, reason = derived_path_ok(dest, [runs], evidence)
     if not ok:
         gate_log(root, "INIT REFUSED archive {}".format(reason))
@@ -3663,7 +3757,7 @@ def archive_run(root, old_goal):
     dest.mkdir(parents=True)
     moved = []
     for entry in sorted(drive.iterdir()):
-        if entry.name in ("local", "runs"):
+        if entry.name in PERSISTENT_DRIVE_ENTRIES:
             continue
         entry.rename(dest / entry.name)
         moved.append(entry.name)
@@ -3719,6 +3813,9 @@ def cmd_init(args):
     drive = root / ".drive"
     existing = read_text(drive / "GOAL.md")
     old_goal = Goal(existing) if existing is not None else None
+    if old_goal is None and run_mode(root) == "lean" and (drive / "STATE.md").is_file():
+        old_goal = LeanRun(read_text(drive / "STATE.md") or "")
+    mode = args.mode or ("rigorous" if args.size else "lean")
     session_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
     archived = None
     if old_goal is not None and same_goal(old_goal, goal_text, slug):
@@ -3754,10 +3851,15 @@ def cmd_init(args):
                   "evidence, set status: running, and continue from next:. Otherwise the run stays blocked and the turn "
                   "ends.".format(state.resume.get("blocked on", "")[:160]))
         return 0
+    if mode == "lean":
+        if args.size:
+            print("drive init: a lean run has no size; drop --size, or pass --mode rigorous for a sized run.", file=sys.stderr)
+            return 2
+        return init_lean(root, drive, slug, goal_text, old_goal, session_id)
     size = args.size
     if size is None:
-        print("drive init: pass --size S, M, L, or XL from the classification. A new run's files and directories depend on its "
-              "size, and a missing --size used to create an S run for every goal.", file=sys.stderr)
+        print("drive init: pass --size S, M, L, or XL from the classification. A new rigorous run's files and directories "
+              "depend on its size.", file=sys.stderr)
         return 2
     if size == "XS":
         print("drive init: XS runs create no .drive/. Record the claim and its evidence in the commit body instead.")
@@ -3815,6 +3917,43 @@ def cmd_init(args):
     if ignored:
         print("Added to .gitignore: {}.".format(", ".join(ignored)))
     print("Next: fill GOAL.md (restate, classification, probe, plan), then commit it as drive(intake): {}.".format(slug))
+    return 0
+
+
+def init_lean(root, drive, slug, goal_text, old_goal, session_id):
+    """Create a lean run: STATE.md, PLAN.md, and (when the project has none yet) LEARNINGS.md from templates/lean/, the
+    ignore line, the owner's hygiene baseline, and the run marker."""
+    archived = archive_run(root, old_goal)[0] if old_goal is not None else None
+    drive.mkdir(exist_ok=True)
+    (drive / "local").mkdir(exist_ok=True)
+    values = {
+        "<goal slug>": slug,
+        "<project>": root.name,
+        '"<verbatim prompt>"': json.dumps(goal_text, ensure_ascii=False),
+        "<ISO UTC>": iso_now(),
+        "<today>": now_utc().strftime("%Y-%m-%d"),
+    }
+    created = []
+    for name in LEAN_FILES:
+        target = drive / name
+        if target.exists():
+            continue
+        target.write_text(fill_template("lean/" + name, values), encoding="utf-8")
+        created.append(name)
+    baseline = capture_baseline(root)
+    ignored = ensure_gitignore(root)
+    marker_path(root).write_text(json.dumps({"slug": slug, "goal": goal_text, "started": iso_now(), "size": None,
+                                             "sessions": [session_id] if session_id else []}) + "\n")
+    baseline_path(root).write_text(json.dumps(baseline, indent=2) + "\n", encoding="utf-8")
+    gate_log(root, "INIT {} lean".format(slug))
+    print("Initialised .drive/ for {} (lean).".format(slug))
+    if created:
+        print("Created: {}.".format(", ".join(created)))
+    if archived:
+        print("Paused the previous run at {}; its restore steps are in RESTORE.md.".format(archived.relative_to(root)))
+    if ignored:
+        print("Added to .gitignore: {}.".format(", ".join(ignored)))
+    print("Next: set STATE.md's budget line, then spawn drive:planner to write .drive/PLAN.md.")
     return 0
 
 
@@ -3983,9 +4122,31 @@ def close_marker(root, how):
     ledger_append(root, {"kind": "end", "how": how})
 
 
+def end_lean(root, ctx):
+    """Close a lean run: STATE.md passes the lean checks with a status that ends a run, and the tree holds nothing the run
+    left uncommitted, no branch, and no worktree."""
+    status = ctx.state.status if ctx.state else ""
+    if status not in ("done", "stopped", "blocked", "aborted", "stalled"):
+        print("drive end: STATE.md status is {}. A lean run ends as done, stopped, blocked, or aborted.".format(status or "missing"))
+        return 1
+    _, f = run_lint(root, "stop")
+    check_hygiene(ctx, f)
+    if f.failed:
+        for line in f.lines():
+            print(line)
+        print("drive end: the run cannot end until these are fixed.")
+        return 1
+    how = status if status in ("done", "stopped", "aborted") else "stopped (STATE.md says {})".format(status)
+    close_marker(root, how)
+    print("Run closed as {}: .drive/local/active removed, so drive's hooks are inert in this repository.".format(how))
+    return 0
+
+
 def cmd_end(args):
     root = find_root(args.root or os.getcwd())
     ctx = Ctx(root)
+    if (root / ".drive").is_dir() and run_mode(root) == "lean":
+        return end_lean(root, ctx)
     status = ctx.state.status if ctx.state else ""
     if status == "aborted":
         _, f = run_lint(root, "stop")
@@ -4188,24 +4349,32 @@ def active_root(cwd):
     return None
 
 
-REINJECT_SECTIONS = re.compile(r"^(1\.|Standing rules|6\.|[7-9]\.|\d\d\.|Reference index)")
+LEAN_REINJECT_SECTIONS = re.compile(r"^(Mode|1\.|Standing rules|[3-8]\.|Roster|Reference index)")
+RIGOROUS_REINJECT_SECTIONS = re.compile(r"^(1\.|6\.|[7-9]\.|\d\d\.|Reference index)")
+STANDING_RULES_SECTION = re.compile(r"^Standing rules")
 
 
-def skill_tail():
-    """The parts of SKILL.md re-read after compaction: the contract (section 1), the standing rules,
-    delegation (section 6), and section 7 to the end. Compaction keeps only the first 5,000 tokens of
-    an invoked skill and may drop an older skill entirely, so the contract and delegation rules are
-    re-printed rather than trusted to survive."""
-    text = read_text(SKILL_DIR / "SKILL.md")
-    if not text:
-        return ""
+def sections_matching(text, pattern):
     kept, keep = [], False
-    for line in text.splitlines():
+    for line in (text or "").splitlines():
         if line.startswith("## "):
-            keep = bool(REINJECT_SECTIONS.match(line[3:].strip()))
+            keep = bool(pattern.match(line[3:].strip()))
         if keep:
             kept.append(line)
     return "\n".join(kept).rstrip()
+
+
+def skill_tail(mode="rigorous"):
+    """What is re-read after compaction. Compaction keeps only the first 5,000 tokens of an invoked skill and may drop an
+    older skill entirely, so the rules are re-printed rather than trusted to survive. A lean run gets SKILL.md from its
+    mode section on, without the start steps; a rigorous run gets SKILL.md's standing rules and references/rigorous.md's
+    contract (section 1), delegation (section 6), and section 7 to the end."""
+    skill = read_text(SKILL_DIR / "SKILL.md") or ""
+    if mode == "lean":
+        return sections_matching(skill, LEAN_REINJECT_SECTIONS)
+    parts = [sections_matching(skill, STANDING_RULES_SECTION),
+             sections_matching(read_text(SKILL_DIR / "references" / "rigorous.md"), RIGOROUS_REINJECT_SECTIONS)]
+    return "\n\n".join(part for part in parts if part)
 
 
 def cmd_hook_reinject(args):
@@ -4222,10 +4391,12 @@ def cmd_hook_reinject(args):
         view = start_view(root)
     except Exception as exc:
         view = "drive start could not read the run: {}".format(exc)
-    print("This session is running /drive. The run's state lives in .drive/ and outranks any summary of "
-          "earlier turns. Re-read .drive/STATE.md and .drive/GOAL.md, then continue from next:.\n")
+    mode = run_mode(root)
+    print("This session is running /drive in {} mode. The run's state lives in .drive/ and outranks any summary of "
+          "earlier turns. Re-read .drive/STATE.md and .drive/{}, then continue from next:.\n".format(
+              mode, "PLAN.md" if mode == "lean" else "GOAL.md"))
     print(view)
-    tail = skill_tail()
+    tail = skill_tail(mode)
     if tail:
         print("")
         print(tail)
@@ -4339,6 +4510,12 @@ def stop_decision(root, data):
         return None
     if state is None:
         reason = "The drive run is active but .drive/STATE.md is missing. Write it from templates/STATE.md with the real next step before stopping."
+    elif run_mode(root) == "lean":
+        reason = lean_stop_reason(root, state)
+        if reason is None:
+            save_counter(counter_path, {})
+            gate_log(root, "ALLOW lean status {}".format(state.status))
+            return None
     else:
         status = state.status
         gate_problems = None
@@ -4402,6 +4579,20 @@ def stop_decision(root, data):
         gate_log(root, "CAP {} consecutive blocks reached CLAUDE_CODE_STOP_HOOK_BLOCK_CAP ({}); Claude Code ends the turn anyway".format(consecutive, cap))
         ledger_append(root, {"kind": "stop-cap", "consecutive": consecutive, "cap": cap, "session_id": data.get("session_id")})
     return {"decision": "block", "reason": reason}
+
+
+def lean_stop_reason(root, state):
+    """Why a lean run's turn may not end yet, or None. Only STATE.md's own checks apply: a status, a next step, and no
+    future timestamp. A running run is held to its next step; every other status ends the turn."""
+    _, f = run_lint(root, "stop")
+    failures = ["{}: {}".format(i["file"], i["message"]) for i in f.items if i["level"] == "fail"]
+    if failures:
+        return "This lean drive run's STATE.md needs fixing before the turn can end: " + " ".join(failures)
+    if state.status in GATE_CLOSED:
+        nxt = state.fields.get("next") or "(no next step is recorded; write one)"
+        return ("The drive run is still {}. Do the next step now with tool calls: {} Then update STATE.md (next, updated) "
+                "before you stop again.".format(state.status, nxt.rstrip(".") + "."))
+    return None
 
 
 def lost_marker_warning(data):
@@ -4490,7 +4681,7 @@ def cmd_hook_stop(args):
 # --- hook-guard: per-agent rules -------------------------------------------------------------
 
 ROLES = {"researcher", "architect", "designer", "implementer", "writer", "verifier", "severe-tester",
-         "security-reviewer", "ui-reviewer", "grader", "investigator", "auditor"}
+         "security-reviewer", "ui-reviewer", "grader", "investigator", "auditor", "planner", "reviewer"}
 READ_ONLY = {"verifier", "security-reviewer", "grader", "auditor"}
 BASH_WRITE_SCOPE = {
     "verifier": [".drive/proofs/", ".drive/reviews/", ".drive/local/ios/"],
@@ -4506,6 +4697,7 @@ TOOL_WRITE_SCOPE = {
     "investigator": [".drive/"],
     "ui-reviewer": [".drive/proofs/", ".drive/local/"],
     "severe-tester": [],
+    "planner": [".drive/"],
 }
 ROLE_WORDS = {
     "verifier": "The verifier checks work and changes nothing",
@@ -4520,6 +4712,8 @@ ROLE_WORDS = {
     "investigator": "The investigator writes only .drive/ and throwaway worktrees under a scratch directory",
     "implementer": "The implementer edits its owned files and never touches git",
     "writer": "The writer edits its owned files and never touches git",
+    "planner": "The planner writes only under .drive/ and never touches git",
+    "reviewer": "The reviewer fixes code in the project, writes under .drive/ only REPORT.md and LEARNINGS.md, and never touches git",
 }
 TEST_DIRS = {"test", "tests", "__tests__", "spec", "specs", "fixtures", "__fixtures__", "testdata", "test-data",
              "e2e", "__snapshots__", "testing", "uitests", "test_data"}
@@ -4534,7 +4728,17 @@ def is_test_path(rel):
     return bool(TEST_NAME_RE.search(parts[-1]))
 
 
-MAKERS = {"implementer", "writer"}
+MAKERS = {"implementer", "writer", "reviewer"}
+
+
+def maker_drive_write_ok(root, role, rel):
+    """The .drive/ paths a maker may write: a package report and worker files in any run; in a lean run, appends to
+    LEARNINGS.md; and for the lean reviewer, REPORT.md."""
+    if rel.startswith(".drive/local/workers/") or re.match(r"^\.drive/packages/[^/]+/report\.json$", rel):
+        return True
+    if rel == ".drive/LEARNINGS.md":
+        return role == "reviewer" or run_mode(root) == "lean"
+    return role == "reviewer" and rel == ".drive/REPORT.md"
 INLINE_CHECKED = READ_ONLY | {"ui-reviewer", "severe-tester", "architect", "designer", "researcher", "investigator"}
 ROLE_WORDS["orchestrator"] = ("The orchestrator never writes verdicts, final audits, live proofs, citation checks, or the provenance "
                               "ledger; the reviewing agents write them and drive's hooks record them")
@@ -5059,8 +5263,9 @@ def tool_write_reason(role, raw_path, root, cwd):
         if rel in frozen_test_paths(root):
             return ("{}. {} is a frozen test (a severe: refutation test or a test your package must make pass); make the code pass "
                     "it, and put a test you believe is wrong in your report.".format(words, rel))
-        if rel.startswith(".drive/") and not (re.match(r"^\.drive/packages/[^/]+/report\.json$", rel) or rel.startswith(".drive/local/workers/")):
-            return "{}. The orchestrator is the only writer of .drive/ state; put state changes in your report at .drive/packages/<id>/report.json instead of editing {}.".format(words, rel)
+        if rel.startswith(".drive/") and not maker_drive_write_ok(root, role, rel):
+            return ("{}. The orchestrator is the only writer of .drive/ state; put state changes in your report instead of editing {} "
+                    "(a lean run's agents may append to .drive/LEARNINGS.md).".format(words, rel))
         return None
     if protected_evidence_rel(rel) and role not in ("ui-reviewer", "severe-tester"):
         return "{}. {} is evidence a reviewer writes through its own round.".format(words, rel)
@@ -5828,7 +6033,7 @@ class Guard:
         if rel in frozen_test_paths(self.root):
             return False
         if rel == ".drive" or rel.startswith(".drive/"):
-            return rel.startswith(".drive/local/workers/") or bool(re.match(r"^\.drive/packages/[^/]+/report\.json$", rel))
+            return maker_drive_write_ok(self.root, self.role, rel)
         if realpath_loose(base) != realpath_loose(self.root):
             return True
         owned = self.owned_globs()
@@ -7287,7 +7492,8 @@ def cmd_hook_snapshot(args):
     path = folder / "{}.json".format(agent)
     if args.phase == "start":
         ledger_append(root, {"kind": "spawn", "agent_type": agent_type, "agent_id": data.get("agent_id")})
-        if role not in SNAPSHOT_ROLES:
+        if role not in SNAPSHOT_ROLES or run_mode(root) == "lean":
+            # A lean run keeps no provenance ledger for reviews, so it takes no tree snapshot and voids nothing.
             return 0
         folder.mkdir(parents=True, exist_ok=True)
         record = {"role": role, "agent_type": agent_type, "agent_id": data.get("agent_id"), "started": iso_now(),
@@ -7304,7 +7510,7 @@ def cmd_hook_snapshot(args):
                            "{}-file, {}-byte, or {:g}-second budget)".format(role, agent, snapshot["by_stat"], SNAPSHOT_MAX_FILES,
                                                                               SNAPSHOT_MAX_BYTES, SNAPSHOT_BUDGET))
         return 0
-    if role not in SNAPSHOT_ROLES:
+    if role not in SNAPSHOT_ROLES or run_mode(root) == "lean":
         return 0
     before, _ = load_json(path) if path.is_file() else (None, None)
     before = before if isinstance(before, dict) else None
@@ -8307,6 +8513,22 @@ def run_lesson_check(skill):
             if any(p.search(line) for _, p in SECRET_PATTERNS):
                 f.fail(rel, "an entry holds a secret-shaped string.")
                 break
+    learned = skill / "references" / "lessons" / "learned.md"
+    if learned.is_file():
+        rel = "references/lessons/learned.md"
+        entries = parse_lessons(read_text(learned) or "", "Entries")
+        for number, heading, fields in entries:
+            for field in LEARNED_FIELDS:
+                if not fields.get(field):
+                    f.fail(rel, "line {} '{}' is missing '- {}:'.".format(number, heading[:60], field))
+            if fields.get("Seen") and not re.match(r"^\d+", fields["Seen"]):
+                f.fail(rel, "line {} '{}' Seen must start with a count.".format(number, heading[:60]))
+            problem = general_rule_problem(heading, fields)
+            if problem:
+                f.fail(rel, "line {} '{}': {}.".format(number, heading[:60], problem))
+            headings.append((normalise_heading(heading), heading, rel, number))
+        if len(entries) > LEARNED_CAP:
+            f.fail(rel, "has {} entries; the cap is {}. Consolidate into general.md or retire entries first.".format(len(entries), LEARNED_CAP))
     for index, (norm, heading, rel, number) in enumerate(headings):
         for other_norm, other, other_rel, other_number in headings[index + 1:]:
             if norm == other_norm or difflib.SequenceMatcher(None, norm, other_norm).ratio() >= 0.92:
@@ -8353,6 +8575,8 @@ def lesson_scope(rel):
         return Path(rel).stem
     if rel.endswith("references/capabilities.md"):
         return "capabilities"
+    if rel.endswith("references/lessons/learned.md"):
+        return "learned"
     if rel.endswith("references/lessons/retired.md"):
         return "retired"
     if rel.endswith("references/lessons/rejected.md"):
@@ -8462,6 +8686,240 @@ def cmd_lesson_commit(args):
 
 
 # ----------------------------------------------------------------------------------------------
+# promote: what a lean run learned, sorted into the project's memory and compounded into the skill
+
+LEARNING_SECTIONS = ["Verified facts", "General rules", "Open failures", "Lessons learned", "Last session", "New entries"]
+LEARNED_FIELDS = ["Because", "Verified by", "Source", "Seen"]
+LEARNED_CAP = 80
+# Below lesson-check's 0.92 near-duplicate line, so a promoted rule never makes lesson-check fail on similarity.
+PROMOTE_DUPLICATE_RATIO = 0.85
+GUESS_RE = re.compile(r"(?i)^\W*(guess|unverified|not verified|not checked|none|unknown)\b")
+
+
+def sentence(text):
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    return text if not text or text[-1] in ".!?" else text + "."
+
+
+def near_duplicate(norm, others, ratio=PROMOTE_DUPLICATE_RATIO):
+    """The first of `others` ((normalised, original) pairs) that `norm` matches or nearly matches, else None."""
+    for other_norm, other in others:
+        if norm == other_norm or difflib.SequenceMatcher(None, norm, other_norm).ratio() >= ratio:
+            return other
+    return None
+
+
+def learning_entries(text):
+    """(heading, fields) for each entry under LEARNINGS.md's '## New entries'."""
+    return [(heading, fields) for _, heading, fields in parse_lessons(text, "New entries")]
+
+
+def entry_is_guess(fields):
+    """An entry whose cause nobody checked: no Verified line, or one (or a Why line) that says it is a guess."""
+    verified = fields.get("Verified", "")
+    return not verified or bool(GUESS_RE.match(verified)) or bool(GUESS_RE.match(fields.get("Why", "")))
+
+
+def general_rule_problem(rule, fields):
+    """Why a rule cannot stand in drive's own lessons as written, or None."""
+    if not rule:
+        return "it has no rule"
+    if re.search(r"[\w\-]+/[\w\-./]+\.\w+", rule) or re.search(r"\b[0-9a-f]{7,40}\b", rule):
+        return "its rule names a path or a hash, so it is about one project"
+    values = [rule] + [str(v) for v in fields.values()]
+    if any(HOME_PATH_RE.search(v) for v in values):
+        return "it names a home-directory path or an email address"
+    if any(pattern.search(v) for v in values for _, pattern in SECRET_PATTERNS):
+        return "it holds a secret-shaped string"
+    if any(PLACEHOLDER_RE.search(strip_inline_code(v)) for v in values):
+        return "it still holds a template placeholder"
+    return None
+
+
+def skill_lesson_headings(skill):
+    headings = []
+    for path, section, _ in lesson_sources(skill):
+        headings.extend((normalise_heading(h), h) for _, h, _ in parse_lessons(read_text(path) or "", section))
+    learned = read_text(skill / "references" / "lessons" / "learned.md") or ""
+    headings.extend((normalise_heading(h), h) for _, h, _ in parse_lessons(learned, "Entries"))
+    return headings
+
+
+def bump_seen(text, heading, today):
+    """learned.md with the Seen count of the entry under `heading` raised by one and today's date added."""
+    lines, inside = text.splitlines(), False
+    for index, line in enumerate(lines):
+        if line.startswith("### "):
+            inside = line[4:].strip() == heading
+            continue
+        match = re.match(r"^- Seen:\s*(\d+)\s*(?:\((.*)\))?\s*$", line) if inside else None
+        if match:
+            dates = [d.strip() for d in (match.group(2) or "").split(",") if d.strip()]
+            if today not in dates:
+                dates.append(today)
+            lines[index] = "- Seen: {} ({})".format(int(match.group(1)) + 1, ", ".join(dates))
+            break
+    return "\n".join(lines) + "\n"
+
+
+def promote_to_skill(skill, candidates, project, slug, today):
+    """Append verified rules that hold in any project to the skill's references/lessons/learned.md, and commit that file
+    alone in the skill repository. A rule a lessons file already holds is not added again; when learned.md holds it, its
+    Seen count rises. Nothing waits for approval. Returns a dict: promoted [(entry, rule)], again [(entry, existing
+    heading)], kept [(entry, reason)], and the commit sha or None."""
+    result = {"promoted": [], "again": [], "kept": [], "sha": None}
+    path = skill / "references" / "lessons" / "learned.md"
+    original = read_text(path)
+    repo = git_out(skill, "rev-parse", "--show-toplevel") if original is not None else None
+    if original is None:
+        reason = "the skill has no references/lessons/learned.md"
+    elif not os.access(str(path), os.W_OK):
+        reason = "the skill's references/lessons/learned.md is not writable here"
+    elif not repo:
+        reason = "the skill directory is not inside a git repository"
+    elif (git_out(Path(repo), "diff", "--cached", "--name-only") or "").strip():
+        reason = "the skill repository already has staged changes"
+    elif run_lesson_check(skill).failed:
+        reason = "drive.py lesson-check already fails in the skill"
+    else:
+        reason = None
+    if reason:
+        result["kept"] = [(c, reason) for c in candidates]
+        return result
+    repo = Path(repo).resolve()
+    rel = str(path.resolve().relative_to(repo))
+    existing = skill_lesson_headings(skill)
+    learned = {h for _, h, _ in parse_lessons(original, "Entries")}
+    text = original.rstrip("\n") + "\n"
+    for entry in candidates:
+        heading, fields = entry
+        rule = re.sub(r"\s+", " ", fields.get("Rule", "")).strip().rstrip(".")
+        problem = general_rule_problem(rule, fields)
+        if problem:
+            result["kept"].append((entry, problem))
+            continue
+        match = near_duplicate(normalise_heading(rule), existing)
+        if match:
+            if match in learned:
+                text = bump_seen(text, match, today)
+            result["again"].append((entry, match))
+            continue
+        if len(learned) >= LEARNED_CAP:
+            result["kept"].append((entry, "learned.md is at its cap of {} entries".format(LEARNED_CAP)))
+            continue
+        parts = [p.strip() for p in heading.split("·")]
+        role = parts[1] if len(parts) >= 3 else "an agent"
+        text += "\n### {}\n- Because: {}\n- Verified by: {}\n- Source: {} · lean run · recorded by {}\n- Seen: 1 ({})\n".format(
+            rule, sentence(fields.get("Why")), sentence(fields.get("Verified")), today, role, today)
+        existing.append((normalise_heading(rule), rule))
+        learned.add(rule)
+        result["promoted"].append((entry, rule))
+    if text.rstrip("\n") == original.rstrip("\n"):
+        return result
+    path.write_text(text, encoding="utf-8")
+
+    def undo(problem):
+        path.write_text(original, encoding="utf-8")
+        result["kept"].extend((e, problem) for e, _ in result["promoted"] + result["again"])
+        result["promoted"], result["again"] = [], []
+        return result
+
+    check = run_lesson_check(skill)
+    if check.failed:
+        return undo("lesson-check refused the append: {}".format("; ".join(i["message"] for i in check.items if i["level"] == "fail")[:200]))
+    promoted = result["promoted"]
+    subject = ("lesson(learned): " + promoted[0][1]) if len(promoted) == 1 else \
+        "lesson(learned): {} rules from a lean run".format(len(promoted)) if promoted else "lesson(learned): rules seen again in a lean run"
+    body = "Source: drive.py promote\nProject: {}\nRun: {}\n".format(project, slug)
+    code, out, err = git(repo, "add", "--", rel)
+    if code == 0:
+        code, out, err = git(repo, "commit", "-q", "-m", subject + "\n\n" + body, "--", rel)
+    if code != 0:
+        git(repo, "reset", "-q", "--", rel)
+        return undo("the commit in the skill repository failed: {}".format((out + err).strip()[:160]))
+    result["sha"] = git_out(repo, "rev-parse", "--short", "HEAD")
+    return result
+
+
+def cmd_promote(args):
+    root = find_root(args.root or os.getcwd())
+    skill = Path(args.skill_dir).resolve() if args.skill_dir else SKILL_DIR
+    path = root / ".drive" / "LEARNINGS.md"
+    text = read_text(path)
+    if text is None:
+        print("drive promote: {} has no .drive/LEARNINGS.md; nothing to promote.".format(root))
+        return 0
+    doc = Doc(text)
+    today = now_utc().strftime("%Y-%m-%d")
+    slug = read_marker(root).get("slug") or LeanRun(read_text(root / ".drive" / "STATE.md") or "").slug or "run"
+    sections = {name: [line for _, line in doc.sections.get(name, [])] for name in doc.section_order}
+    for name in LEARNING_SECTIONS:
+        sections.setdefault(name, [])
+
+    def add(name, line):
+        present = [(normalise_heading(l[2:]), l) for l in sections[name] if l.startswith("- ")]
+        if near_duplicate(normalise_heading(line[2:]), present, 0.9) is None:
+            sections[name].append(line)
+
+    entries = learning_entries(text)
+    guesses, candidates = 0, []
+    for heading, fields in entries:
+        parts = [p.strip() for p in heading.split("·")]
+        date, title = (parts[0], parts[-1]) if len(parts) >= 2 else (today, heading)
+        if entry_is_guess(fields):
+            guesses += 1
+            add("Open failures", "- {} {}: {} Guess: {} Next: verify it before relying on it.".format(
+                date, title, sentence(fields.get("Failed") or title), sentence(fields.get("Why") or "none recorded")))
+            continue
+        if fields.get("Why"):
+            add("Verified facts", "- {} Verified: {}".format(sentence(fields["Why"]), sentence(fields["Verified"])))
+        if not fields.get("Rule"):
+            continue
+        if fields.get("Scope", "").strip().lower().startswith("general") and not args.no_skill:
+            candidates.append((heading, fields))
+        else:
+            add("General rules", "- {} Because: {} From: {}.".format(sentence(fields["Rule"]), sentence(fields.get("Why") or "see the entry"), heading))
+    result = promote_to_skill(skill, candidates, root.name, slug, today) if candidates else {"promoted": [], "again": [], "kept": [], "sha": None}
+    for (heading, fields), rule in result["promoted"]:
+        add("Lessons learned", "- {} Promoted to drive's references/lessons/learned.md on {}.".format(sentence(rule), today))
+    for (heading, fields), match in result["again"]:
+        add("Lessons learned", "- {} Already in drive's lessons as \"{}\" ({}).".format(sentence(fields.get("Rule")), match, today))
+    for (heading, fields), reason in result["kept"]:
+        add("General rules", "- {} Because: {} From: {}. Kept in this project: {}.".format(
+            sentence(fields.get("Rule")), sentence(fields.get("Why") or "see the entry"), heading, reason))
+    if entries:
+        sections["Last session"] = [line for line in sections["Last session"] if line.startswith("<!--")] + [
+            "{} · {} · {} new entr{}: {} verified, {} guess{}; {} promoted to drive, {} already there, {} kept here.".format(
+                iso_now(), slug, len(entries), "y" if len(entries) == 1 else "ies", len(entries) - guesses, guesses,
+                "" if guesses == 1 else "es", len(result["promoted"]), len(result["again"]), len(result["kept"]))]
+    new = sections["New entries"]
+    sections["New entries"] = new[:next((i for i, line in enumerate(new) if line.startswith("### ")), len(new))]
+    head = text.split("\n## ", 1)[0].rstrip("\n") if not text.startswith("## ") else ""
+    out = [head, ""] if head else []
+    for name in LEARNING_SECTIONS + [n for n in doc.section_order if n not in LEARNING_SECTIONS]:
+        lines = list(sections[name])
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+        out.extend(["## " + name] + lines + [""])
+    path.write_text("\n".join(out).rstrip("\n") + "\n", encoding="utf-8")
+    print("drive promote: {} new entr{} ({} verified, {} guess{}).".format(
+        len(entries), "y" if len(entries) == 1 else "ies", len(entries) - guesses, guesses, "" if guesses == 1 else "es"))
+    for _, rule in result["promoted"]:
+        print("promoted to references/lessons/learned.md: {}".format(rule))
+    for (_, fields), match in result["again"]:
+        print("already in drive's lessons: {} (as \"{}\")".format(fields.get("Rule"), match))
+    for (_, fields), reason in result["kept"]:
+        print("kept in the project: {} ({})".format(fields.get("Rule"), reason))
+    if result["sha"]:
+        print("Committed {} in the skill repository. Undo with: git -C {} revert {}".format(
+            result["sha"], git_out(skill, "rev-parse", "--show-toplevel"), result["sha"]))
+    print("Sorted .drive/LEARNINGS.md; commit it with the run.")
+    return 0
+
+
+# ----------------------------------------------------------------------------------------------
 # Entry point
 
 
@@ -8479,7 +8937,8 @@ def build_parser():
     p.add_argument("--goal", help="the goal, verbatim; '-' reads it from stdin")
     p.add_argument("--goal-file", help="read the goal from this file (safe for quotes, $, and backticks)")
     p.add_argument("--slug", help="goal slug (default: derived from the goal)")
-    p.add_argument("--size", choices=SIZES, help="size from classification; required for a new run")
+    p.add_argument("--size", choices=SIZES, help="size from classification; required for a new rigorous run")
+    p.add_argument("--mode", choices=MODES, help="lean (the default without --size) or rigorous (the default with --size)")
     p.add_argument("--root", help="project directory (default: current directory)")
     p = add("start", cmd_start, "Print the read-at-start view. Always exits 0.")
     p.add_argument("--root")
@@ -8536,6 +8995,11 @@ def build_parser():
     p.add_argument("--heading", help="the rule heading, when it cannot be read from the diff")
     p.add_argument("--scope", help="general, capabilities, a domain name, retired, or rejected")
     p.add_argument("--skill-dir")
+    p = add("promote", cmd_promote, "Sort LEARNINGS.md's new entries into its sections and promote verified general rules to "
+                                    "references/lessons/learned.md, deduplicated and committed alone. Never fails the run.")
+    p.add_argument("--skill-dir")
+    p.add_argument("--no-skill", action="store_true", help="sort the project's file only; promote nothing into the skill")
+    p.add_argument("--root")
     p = add("capabilities", cmd_capabilities, "Write .drive/capabilities.json. Never fails.")
     p.add_argument("--root")
     p = add("selfcheck", cmd_selfcheck, "Check that every path the skill names exists and SKILL.md is within its cap.")

@@ -1,12 +1,13 @@
 # drive
 
-`/drive` is a Claude Code skill that takes one high-level goal and drives it to finished,
-verified work without anyone watching. It classifies the work, researches what it does not know,
-writes a specification whose requirements are claims a test could refute, designs, plans tests,
-builds in parallel waves, verifies with independent agents that never see the maker's reasoning,
-checks rendered UI with vision, records everything in files inside the target repository, and
-turns failures into lessons that make the next run better. It scales down: a one-line fix gets a
-refutation test and a commit, not a process.
+`/drive` is a Claude Code skill that takes one high-level goal and drives it to finished, tested,
+committed work without anyone watching. By default it runs lean, to save tokens: a Fable planner
+writes one implementation-ready plan, Sonnet implementers build it in parallel, an Opus reviewer
+checks each change against the plan and fixes what is wrong itself, and every agent records what it
+learns in a file the next plan consults. `/drive --rigorous <goal>`, or a goal that says "rigorous" or
+"full verification", runs the full process instead: specification, design, test plans, frozen severe
+tests, independent verifiers that never see the maker's reasoning, the status ladder, UI checks with
+vision, and a final audit. A one-line fix gets a test and a commit, not a process.
 
 ```
 /drive find the intermittent 500 on checkout and fix it
@@ -14,6 +15,7 @@ refutation test and a commit, not a process.
 /drive move our AI gateway from the external repo into a core service of this platform
 /drive research our market position and build a site with blog and docs sections
 /drive build a native iOS app with a serverless backend from this brief: ...
+/drive --rigorous move our billing service onto the new ledger
 /drive --resume
 ```
 
@@ -22,7 +24,34 @@ too unless another command already uses that name; use `/drive:drive` when it do
 
 ## How it works
 
-The orchestrator is the main conversation, designed for Fable 5.1 at high effort. At intake it
+### Lean mode, the default
+
+Rigorous runs cost too much for what they bought. The first complete build spent $359 and about
+seven hours, three of them planning before any code, and another run spent $45 in 75 minutes without
+writing product code. The money went to ceremony (separate spec, design, and test-plan documents with
+review rounds, research lanes, per-package verifier rounds, the evidence ledger, retros, and a final
+audit), not to the split between models. Lean mode keeps the split and drops the ceremony.
+
+The orchestrator, the main conversation on Fable 5.1 at medium effort, only dispatches and commits.
+`drive:planner` (Fable 5.1) consults the project's `.drive/LEARNINGS.md` and drive's lessons, then
+writes `.drive/PLAN.md`: for each work package the files, interfaces, data shapes, behaviour with edge
+cases, the tests with inputs and expected outputs, an acceptance command, and dependencies. Nobody
+reviews the plan. `drive:implementer` agents (Sonnet 5) build packages in parallel and follow the plan
+literally. `drive:reviewer` (Opus 5) reads each package's change against the plan, reruns its tests,
+and fixes defects in place, sending back only a package that is fundamentally wrong, and a last Opus
+review runs the full suite and writes `.drive/REPORT.md`. Every agent appends what failed, why, how it
+was checked, and the rule that would have prevented it to `.drive/LEARNINGS.md`; at the finish
+`drive.py promote` sorts those entries into the project's verified facts, rules, and open failures,
+and appends verified rules that hold in any project to `skill/references/lessons/learned.md`,
+deduplicated and committed with a one-line source. A lean run keeps honest reporting, no fakes
+presented as live, the credential and destructive-action boundaries, commits on the current branch
+with no branches or pushes, a short STATE.md, and a budget line that is a hard stop. The hooks check a
+lean run only for a STATE.md with a status, a next step, and no future timestamp.
+
+### Rigorous mode
+
+The rigorous process lives in `skill/references/rigorous.md` and is loaded only when asked for. Its
+orchestrator is designed for Fable 5.1 at high effort. At intake it
 answers three questions separately. The **shape** (build, feature, fix, move, publish, report,
 operate) fixes the order of phases. The **traits** (UI, API, auth, data, existing code, async
 systems, and a dozen more) attach gates such as an Opus security review or a design contract. The
@@ -73,12 +102,13 @@ resumes itself only through a scheduler that can start a Claude session; on a ma
 API-key login and no Desktop app, where a CI job is the only scheduler, the soak check still acts, and
 you resume the run by hand with `/drive --resume` once the window ends.
 
-Twelve subagents do the work, each with its model, effort, tools, and preloaded skills pinned in
+Fourteen subagents do the work, each with its model, effort, tools, and preloaded skills pinned in
 `skill/agents/`. Drive uses exactly three models, pinned by full ID: `claude-fable-5-1` (Fable 5.1)
-for the orchestrator and the auditor, which runs final audits and disputes; `claude-opus-5` (Opus 5)
-for the architect, designer, writer, verifier, severe tester, security reviewer, UI reviewer, and
-investigator, where judgment or prose quality is worth the premium; and `claude-sonnet-5` (Sonnet 5)
-for the researcher, implementer, and grader, the grader at low effort for checklists.
+for the orchestrator, the lean planner, and the auditor, which runs rigorous final audits and
+disputes; `claude-opus-5` (Opus 5) for the lean reviewer and, in rigorous runs, the architect,
+designer, writer, verifier, severe tester, security reviewer, UI reviewer, and investigator; and
+`claude-sonnet-5` (Sonnet 5) for the researcher, implementer, and grader, the grader at low effort for
+checklists.
 Haiku and older models are never selected.
 A classifier refusal is logged and reported, never retried on another model.
 
@@ -103,11 +133,11 @@ what is installed and lowers the proof ceiling of claims it cannot verify rather
 ## Launching a long run
 
 ```bash
-claude --bg --name drive-<slug> --model claude-fable-5-1 --effort high --permission-mode auto \
+claude --bg --name drive-<slug> --model claude-fable-5-1 --effort medium --permission-mode auto \
   --settings "$DRIVE_SETTINGS" "/drive <goal>"
 ```
 
-`install.sh` prints `DRIVE_SETTINGS`, the per-run settings JSON: the Stop hook block cap of 30, the
+For a rigorous run, pass `--effort high` and `"/drive --rigorous <goal>"`. `install.sh` prints `DRIVE_SETTINGS`, the per-run settings JSON: the Stop hook block cap of 30, the
 ten-minute Bash timeout, the retry watchdog, the Workflow allow rule, `worktree.bgIsolation` set to
 `none`, the one-hour prompt cache for the main conversation, and the skill repository under
 `additionalDirectories` so lesson commits can write there. The
@@ -131,11 +161,12 @@ hand-off is possible.
 
 | Path | What it is |
 |---|---|
-| `skill/SKILL.md` | the spine the orchestrator follows |
+| `skill/SKILL.md` | the lean flow the orchestrator follows, and the switch to rigorous mode |
+| `skill/references/rigorous.md` | the full rigorous process, read only in rigorous mode |
 | `skill/agents/` | the subagent roster |
 | `skill/references/` | procedures read on demand: intake, shapes, spec, design, research, testing, verification, UI, parallel work, state files, lessons, long runs, models, safety, security, observability, capabilities, definition of done, and domain packs for iOS, Cloudflare, and the web |
-| `skill/references/lessons/` | lessons the skill has learned; one commit per lesson, undo with `git revert` |
-| `skill/templates/` | every file a run writes into a project |
+| `skill/references/lessons/` | lessons the skill has learned; `learned.md` holds rules lean runs promoted; one commit per lesson or promotion, undo with `git revert` |
+| `skill/templates/` | every file a run writes into a project; `templates/lean/` holds PLAN.md, STATE.md, LEARNINGS.md, and REPORT.md for lean runs |
 | `skill/scripts/drive.py` | the state tool: init with the hygiene baseline, launch preflight, repository visibility, capabilities, start view, lint, end, the Stop, re-injection, guard, commit-record, and snapshot hooks with the provenance ledger, the floor guard, frozen tests, worktree landing, lesson checks and commits, and selfcheck |
 | `skill/hooks/hooks.json` | plugin hooks: the Stop gate, state re-injection after compaction or resume, per-agent write and git guards, records of the main thread's commits and of files changed while a reviewer runs, transcript-backed provenance for evidence reviewers write, and voiding of a review when a tracked file changed under it with no recorded edit or HEAD was rewritten |
 | `skill/evals/` | behavioural eval cases for `claude plugin eval`; first scored on 2026-09-15; `skill/evals/README.md` section 2 says how to run it on a machine whose `~/.docker` holds symbolic links |

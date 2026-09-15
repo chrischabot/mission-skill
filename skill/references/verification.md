@@ -94,7 +94,7 @@ as `unverifiable`. "The cache must be safe under concurrent writes" is contract 
 "I made it safe" is a conclusion and never does. A `/code-review` finding enters only as a previous gap
 with its location, never with its argument.
 
-The verifier's prompt opens with the reason line from SKILL.md section 6, then says: "Verify every
+The verifier's prompt opens with the reason line from `references/rigorous.md` section 6, then says: "Verify every
 claim in the handoff against the scope. Run the validation commands yourself. Attempt to refute each
 claim. If you are uncertain whether a claim holds, it does not hold. Report every gap you find with
 its confidence and severity; filtering happens afterwards. Write the verdict to the path in the
@@ -302,7 +302,7 @@ Confidence uses one scale everywhere: 100 demonstrated in the real runtime with 
 reliably reproduced under realistic conditions against an independent oracle; 50 reproduced under
 contrived conditions; 25 speculative; 0 inapplicable.
 
-After every gate run and every verification round, print the transcript block in SKILL.md section 5,
+After every gate run and every verification round, print the transcript block in `references/rigorous.md` section 5,
 which is its only copy. Fill it only from gate exit codes and a validated verdict file, one `GAPS` line
 per confirmed gap with blocking gaps first. Before a round's verdict exists, `VERDICT` reads `pending`.
 
@@ -335,7 +335,7 @@ unit's diff exceeds about 800 changed lines, when a claim carries money or auth,
 
 ## 6. Loop control: refutation, convergence, disputes
 
-**Round bounds.** These two tables are the source of truth for round bounds; SKILL.md sections 3 and
+**Round bounds.** These two tables are the source of truth for round bounds; `references/rigorous.md` sections 3 and
 5, `references/intake.md` section 9, `references/parallel.md` section 8, and the shape files repeat
 them and must agree with them.
 

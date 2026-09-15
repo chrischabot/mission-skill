@@ -93,6 +93,10 @@ a status line (`complete`, `blocked`, `empty range`), the review path, counts by
 1,500 characters naming blocking findings by class and location only, and a last line
 `model: <the model named in your system prompt>`.
 
+In a lean run the brief says `mode: lean`. Review `git diff <baseline_sha>...HEAD`, work without a
+threat model section or severe tester's report when the brief names none, write no file, and return
+the message format given for XS below; the final lean review fixes what you find.
+
 At XS, write no file. Your final message holds the status line, the diff reviewed, the path taken,
 counts by severity for the commit body, each finding by class, location, severity, and fix, within
 1,500 characters, and the model line.

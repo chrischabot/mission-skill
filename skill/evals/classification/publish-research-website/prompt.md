@@ -13,4 +13,4 @@ append_system_prompt: >-
   the run with one line naming that file. Do not start the phase that follows intake.
 ---
 
-/drive Research where our project stands against similar tools, then build a website in this repository that describes the project, its goals, and the team, with a blog section and a documentation section, and deploy it so the site is live on the web.
+/drive --rigorous Research where our project stands against similar tools, then build a website in this repository that describes the project, its goals, and the team, with a blog section and a documentation section, and deploy it so the site is live on the web.

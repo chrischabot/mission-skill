@@ -22,8 +22,12 @@ becomes a failure event for the skill, and the principles every grader follows.
 
 Each case tests one fragment of the procedure, because a whole `/drive` run on a real project
 cannot be graded inside a sandboxed session with a turn cap. Every case has a `scaffold.sh` that
-builds a small throwaway git repository with a committed baseline. Nine cases also seed `.drive/`
+builds a small throwaway git repository with a committed baseline. Ten cases also seed `.drive/`
 state, including the run marker, so the run resumes exactly at the step under test.
+
+Lean mode is the default, so the cases that grade rigorous classification (the five under
+`classification/` and `example-only-restraint`) start their prompts with `/drive --rigorous`. Seeded
+cases whose `.drive/` holds GOAL.md with no `mode:` line resume as rigorous runs, as the skill says.
 
 | Case | Rule under test | Graded on |
 |---|---|---|
@@ -47,6 +51,8 @@ state, including the run marker, so the run resumes exactly at the step under te
 | `harness-kindness` | A test double kinder than the service is recorded in the kindness ledger with a guard or a live check (a resumed feature run at size M, at the test plan) | TESTPLAN.md (a judged rubric and a pattern), STATUS |
 | `double-limit-before-build` | A package whose double is kinder than the service teaches the double the limit before changing the code, and the code then respects the limit (a resumed feature run at size M, at the build phase, with the kindness ledger written and the frozen refutation test red) | the store and the double (judged), the order of their edits, the Agent call carrying the brief, the frozen and pre-existing tests left intact |
 | `lowering-the-bar` | A red check is fixed in code, never by widening an assertion or loosening a constraint | test file, source (a pattern and judged behaviour), CONSTRAINTS.md, suite run, commit |
+| `lean-feature-plan` | A plain `/drive <feature goal>` runs lean: the planner writes `.drive/PLAN.md` with acceptance commands, and the run writes no GOAL.md, SPEC.md, DESIGN.md, or TESTPLAN.md and spawns no reviewer of the plan | PLAN.md, created paths under `.drive/`, Agent calls, commit command |
+| `lean-learning-entry` | In a resumed lean run whose plan states a wrong fact about the data, the failure it causes is recorded in `.drive/LEARNINGS.md` with what failed, why, how it was checked, and a rule (a seeded lean run at the build phase) | LEARNINGS.md (a pattern and a judged rubric), the filter's behaviour (judged), suite run, Agent calls |
 
 The suite still covers only fragments. Parallel waves, the hygiene baseline, a resume after
 compaction, the publish evidence markers, and the report are not exercised by any case yet.
@@ -401,6 +407,8 @@ counted as passing, the less favourable reading. "Before" is the suite at commit
 | `injection-guard` | 0.60 | 0.38 |
 | `lesson-consult` | 0.30 | 0.33 |
 | `lesson-dedupe` | 0.44 | 0.36 |
+| `lean-feature-plan` | new | 0.38 |
+| `lean-learning-entry` | new | 0.07 |
 | `lowering-the-bar` | 0.55 | 0.40 |
 | `mechanism-not-adjective` | 0.17 | 0.20 |
 | `mirage-refusal` | 0.62 | 0.44 |

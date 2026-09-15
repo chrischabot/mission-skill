@@ -8,4 +8,4 @@ timeout_seconds: 900
 allowed_tools: [Read, Glob, Grep, Skill, Agent, TodoWrite, Bash, Write, Edit]
 ---
 
-/drive This is only an example of the kind of project I might hand you some day, not something to build: a recipe-sharing iPhone app with a serverless backend, where people save recipes, plan the week's meals, and share a shopping list with their household. Do not build it or scaffold anything for it. Tell me how you would classify a project like that and what the first phases would produce.
+/drive --rigorous This is only an example of the kind of project I might hand you some day, not something to build: a recipe-sharing iPhone app with a serverless backend, where people save recipes, plan the week's meals, and share a shopping list with their household. Do not build it or scaffold anything for it. Tell me how you would classify a project like that and what the first phases would produce.

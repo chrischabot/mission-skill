@@ -120,7 +120,7 @@ Analytics default to a cookieless option with no consent banner; `external-syste
 ## Verification centre, Done, parallelism
 
 The centre of gravity is claim tracing plus screenshots and gates against the deployed site, judged
-by agents that wrote none of it. SKILL.md's bound of 3 verifier rounds for publish applies to each
+by agents that wrote none of it. The rigorous bound of 3 verifier rounds for publish applies to each
 gated phase separately (content-plan, design, design-qa, deploy, live-proof), so a full run may spend
 up to fifteen rounds in total, never more than three on one gate. Done means: when production is
 in scope, live proof passed on the production URL with a matching build stamp; otherwise the preview

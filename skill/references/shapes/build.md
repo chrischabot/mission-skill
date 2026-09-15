@@ -11,7 +11,7 @@ while the product does not, so contracts, the skeleton, and integration are sepa
 
 The goal names something new with no code for it in the working directory. Before assuming a
 greenfield, look for a sibling repository the goal names; if one hosts the deliverable, the shape is
-`feature`, and SKILL.md section 2 step 0 moves the run there. There are no variants: a data pipeline, a command-line tool, and a library
+`feature`, and `references/rigorous.md` section 2 step 0 moves the run there. There are no variants: a data pipeline, a command-line tool, and a library
 are builds with the `data`, `cli`, or `public-api` trait. Read the owner's conventions and any sibling
 repositories at intake, and check that the resource names the design will need (services, databases,
 buckets, domains) are not already taken.

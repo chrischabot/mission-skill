@@ -153,16 +153,22 @@ class ReinjectTests(DriveTestCase):
         result = self.hook("hook-reinject", {"hook_event_name": "SessionStart", "source": "compact", "cwd": str(repo)})
         self.assertIn("DRIVE · START", result.stdout)
         self.assertIn("next: Run the verifier", result.stdout)
-        skill = (SKILL / "SKILL.md").read_text().splitlines()
-        for prefix in ("## 1. ", "## Standing rules", "## 6. ", "## 7. ", "## 9. ", "## Reference index"):
-            heading = next((line for line in skill if line.startswith(prefix)), None)
-            self.assertIsNotNone(heading, "the real SKILL.md has a {!r} section".format(prefix))
+        # make_run is a rigorous run: SKILL.md's standing rules, then references/rigorous.md's contract, delegation, and
+        # section 7 to the end.
+        self.assertIn("rigorous mode", result.stdout)
+        self.assertIn("## Standing rules", result.stdout)
+        rigorous = (SKILL / "references" / "rigorous.md").read_text().splitlines()
+        for prefix in ("## 1. ", "## 6. ", "## 7. ", "## 9. ", "## Reference index"):
+            heading = next((line for line in rigorous if line.startswith(prefix)), None)
+            self.assertIsNotNone(heading, "references/rigorous.md has a {!r} section".format(prefix))
             self.assertIn(heading, result.stdout)
-        for prefix in ("## 2. ", "## 3. ", "## 4. ", "## 5. ", "## Run state at invocation"):
-            heading = next(line for line in skill if line.startswith(prefix))
+        for prefix in ("## 2. ", "## 3. ", "## 4. ", "## 5. "):
+            heading = next(line for line in rigorous if line.startswith(prefix))
             self.assertNotIn(heading, result.stdout)
+        skill = (SKILL / "SKILL.md").read_text().splitlines()
+        self.assertNotIn(next(line for line in skill if line.startswith("## 3. ")), result.stdout)
         self.assertNotIn("argument-hint:", result.stdout)
-        last = next(line for line in reversed(skill) if line.strip())
+        last = next(line for line in reversed(rigorous) if line.strip())
         self.assertIn(last, result.stdout)
 
     def test_start_command_without_run(self):

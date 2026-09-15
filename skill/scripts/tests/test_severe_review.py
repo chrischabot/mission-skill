@@ -323,12 +323,19 @@ class InitAndPlanTests(Severe, DriveTestCase):
         self.commit(repo, "chore: start")
         return repo
 
-    def test_a_new_run_without_a_size_is_refused(self):
+    def test_a_new_rigorous_run_without_a_size_is_refused(self):
         repo = self.fresh()
-        result = self.run_drive("init", "--goal", "add a usage dashboard to the admin area", cwd=repo)
+        result = self.run_drive("init", "--mode", "rigorous", "--goal", "add a usage dashboard to the admin area", cwd=repo)
         self.assertEqual(result.returncode, 2)
         self.assertIn("--size", result.stderr)
         self.assertFalse((repo / ".drive").exists())
+
+    def test_a_new_run_without_a_size_or_mode_is_lean(self):
+        repo = self.fresh()
+        result = self.run_drive("init", "--goal", "add a usage dashboard to the admin area", cwd=repo)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("mode: lean", (repo / ".drive/STATE.md").read_text())
+        self.assertFalse((repo / ".drive/GOAL.md").exists())
 
     def test_a_goal_with_quotes_dollars_and_backticks_survives_stdin_and_a_file(self):
         goal = 'Fix "quoted" $HOME and `ticks` in the export'

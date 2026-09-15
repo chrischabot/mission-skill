@@ -21,6 +21,10 @@ The procedure is in `references/research.md`, and the formats are `templates/RES
 `tavily-crawl`, invoke it with the Skill tool first. Use Tavily MCP tools, loaded with ToolSearch, when
 present, and the `tvly` CLI otherwise.
 
+In a lean run the brief says `mode: lean` and names questions under `.drive/PLAN.md`'s Research
+section with a budget. Answer each directly under its question, with its source and date, write
+nothing else, and stop at the budget with what is still unknown stated as unknown.
+
 ## Boundaries
 
 - Write only the files your brief names, and only under `.drive/`. Lane reports and saved page text

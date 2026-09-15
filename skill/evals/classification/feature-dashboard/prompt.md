@@ -13,4 +13,4 @@ append_system_prompt: >-
   the run with one line naming that file. Do not start the phase that follows intake.
 ---
 
-/drive Add a usage dashboard to the existing admin area that shows daily active accounts and new signups for the last 30 days.
+/drive --rigorous Add a usage dashboard to the existing admin area that shows daily active accounts and new signups for the last 30 days.

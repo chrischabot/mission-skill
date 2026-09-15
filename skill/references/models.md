@@ -7,6 +7,41 @@ overrides you may apply, how grading is split between cheap and expensive judges
 never used, what a run should cost, how to keep the prompt cache warm, and how every result proves
 which model produced it.
 
+## Lean mode: the default split
+
+A lean run, the default, routes by one idea: a big model plans once, a cheap model writes the code, and
+a mid-size model reviews and corrects it. Fable writes only the plan, so its premium is paid on one
+read-heavy invocation rather than on every step. Sonnet writes all the code, where most output
+tokens go. Opus reviews each change and fixes the mistakes itself, because a round trip that sends a
+finding back to Sonnet costs a brief, a re-read, and a second review. The orchestrator dispatches and
+commits and reads no source, so its context, the cost that grows with every request, stays small.
+
+| Role | Model | Effort | Why here |
+|---|---|---|---|
+| orchestrator (main conversation) | `claude-fable-5-1` | medium | It holds the run across turns but only dispatches, commits, and runs `drive.py promote`; medium keeps each of its many small turns cheap. |
+| `planner` | `claude-fable-5-1` | high | One implementation-ready plan decides the quality of everything Sonnet builds, so the most capable model spends its tokens there and nowhere else. |
+| `researcher` | `claude-sonnet-5` | high | At most one bounded lookup per run, for an API or version fact the plan needs. |
+| `implementer` | `claude-sonnet-5` | high | The largest output sink; following a detailed plan literally is what Sonnet does well, and high effort avoids its literal narrowing at low effort. |
+| `reviewer` | `claude-opus-5` | high | Finding and fixing defects in someone else's code is bounded judgment, and fixing in place is cheaper than a second implementer round. It also runs the final review and writes the report. |
+| `security-reviewer` | `claude-opus-5` | high | One pass over the finished diff when a goal touches authentication, payments, or untrusted input, kept in a subagent for classifier reasons (`safety.md`). |
+
+A lean run passes no per-call `model` override. A package the reviewer returns as fundamentally wrong
+goes to a fresh Sonnet implementer once, with the finding appended, not to a stronger model.
+
+**Lean cost and time envelopes.** These are targets to measure lean runs against, not figures any
+run has proven yet. Write the dollar figure on STATE.md's budget line as a hard stop.
+
+| Work | Time | Spend target |
+|---|---|---|
+| small fix (the XS fast path, no agents) | minutes | under $5 |
+| feature (one plan, a few packages) | under an hour | under $25 |
+| build at M (several packages in waves) | a few hours | under $80 |
+
+A run records spend only from a recorded figure (a headless result's `total_cost_usd`, `/usage`, or
+the harness budget line) and otherwise writes "not measured". When the first lean runs record their
+spend, replace these targets with measured figures, as section 7 did for rigorous builds. Sections 1
+to 10 below describe rigorous mode.
+
 ## 1. The routing principle
 
 Route by the shape of the work, not by prestige. Work that produces many output tokens
@@ -50,11 +85,11 @@ Opus's. A Fable context that re-reads itself is cheap per token, but at 300K to 
 request, cache reads are still the orchestrator's largest cost; Fable writing code is expensive on
 every count.
 
-## 2. The roster
+## 2. The rigorous roster
 
 Model and effort live in each agent's frontmatter under `agents/`. The Agent tool has no effort
 parameter, and a Workflow `agent()` call with `agentType` inherits the file's model and effort, so
-these frontmatter lines are the source of truth. SKILL.md, section 5 of this file,
+these frontmatter lines are the source of truth. `references/rigorous.md`, SKILL.md's roster, section 5 of this file,
 `references/verification.md` section 11, and the README repeat the values for readers; where a copy
 disagrees with an agent file, the copy is wrong, and `scripts/tests/test_model_ids.py` fails on any
 model ID outside the three.
@@ -85,6 +120,8 @@ Every agent ends its final message with the model it ran as and returns a fixed-
 status line, file paths, and at most 1,500 characters.
 
 ## 3. The orchestrator stays on Fable at high for the whole run
+
+This section is for rigorous runs; a lean run's orchestrator runs at medium and is launched with `--effort medium`.
 
 The launch recipe sets `--model claude-fable-5-1 --effort high` (see `long-running.md`). SKILL.md sets no
 model, because a skill's model override lasts one turn and each switch rebuilds the whole cache.
@@ -171,7 +208,7 @@ the launch recipe sets it to `claude-sonnet-5` for the run's process whenever `/
 That variable is the override to use; the older `ANTHROPIC_SMALL_FAST_MODEL` is still documented but deprecated in its favour, so never set it. Never write `haiku` in an agent file, an Agent
 call, or a Workflow script.
 
-## 7. Cost envelopes
+## 7. Rigorous cost envelopes
 
 Estimate at intake from the shape and size and write the figure on GOAL.md's `budget:` line. These
 are estimates from a cost model recomputed on 2026-09-14 at September 2026 prices, assuming the
@@ -236,7 +273,7 @@ warns past the count, and fails past twice the count until a DECISIONS.md entry 
 overrun with a `Narrows:` line naming what was cut. Reviews are never counted, because they are the
 ceremony the size requires, so the count bounds how much building and research a run buys and the
 dollar envelope bounds the rest. At the warning, log the overrun in DECISIONS.md and narrow in the
-order SKILL.md section 9 gives; at the failure, record the overrun with its `Narrows:` line and
+order `references/rigorous.md` section 9 gives; at the failure, record the overrun with its `Narrows:` line and
 re-plan within the remaining envelope, or stop. Record each phase's estimate in the plan; when a
 phase spends twice its estimate, stop, record why in STATE.md, and continue only after a re-plan
 in GOAL.md shows the remaining envelope covers the rest. The report states the envelope and the
