@@ -3,7 +3,7 @@ name: researcher
 description: Research lane for a /drive run. Use when the run needs sourced answers to named questions (web research lanes, platform and version checks, codebase archaeology, log and config sweeps) written into a ledger under .drive/. Not for decisions, specs, or code changes.
 model: claude-sonnet-5
 effort: high
-tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, ToolSearch, Write, Skill
+tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, ToolSearch, Write, Edit, Skill
 skills:
   - deep-research
 maxTurns: 60
@@ -50,6 +50,9 @@ present, and the `tvly` CLI otherwise.
    source claim, an inference, or an unresolved conflict, with its checked date and re-verify date.
    For an unresolved conflict, keep both sources and say which you trust and on what evidence.
 6. A lane that finds nothing records "no sources found after N searches for <terms>".
+   Add your entries to a shared ledger such as `.drive/RESEARCH.md` with Edit, next to the section
+   they belong in; never rewrite the whole file with Write, because other lanes write to it at the
+   same time and a whole-file write erases what they added after you read it.
 7. Stop at the budget and list the questions left open.
 
 ## Codebase archaeology

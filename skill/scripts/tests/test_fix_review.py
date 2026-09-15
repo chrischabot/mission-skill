@@ -426,3 +426,22 @@ class ReadOnlyProbeTests(Hooks, DriveTestCase):
                      "import importlib.util as u; s = u.spec_from_file_location('m', 'm.py')"]:
             with self.subTest(code=code):
                 self.assertBlocked(self.bash(self.repo, "python3 -c \"{}\"".format(code.replace('"', '\\"')), agent="drive:architect"))
+
+
+class ResearcherLedgerEditTests(Hooks, DriveTestCase):
+    """The linkkeeper run on 2026-09-15: drive:researcher had Write but no Edit, so a lane rewrote the shared RESEARCH.md
+    whole while other lanes write to it; the entries survived only by luck."""
+
+    def setUp(self):
+        super().setUp()
+        self.repo = self.make_run()
+
+    def test_the_researcher_can_edit_the_ledger_and_is_told_not_to_rewrite_it(self):
+        text = (SKILL / "agents/researcher.md").read_text()
+        tools = next(line for line in text.splitlines() if line.startswith("tools:"))
+        self.assertIn("Edit", [t.strip() for t in tools.split(":", 1)[1].split(",")])
+        self.assertIn("never rewrite the whole file with Write", text)
+        self.assertAllowed(self.guard(self.repo, "Edit", agent="drive:researcher", file_path=str(self.repo / ".drive/RESEARCH.md"),
+                                      old_string="a", new_string="b"))
+        self.assertBlocked(self.guard(self.repo, "Edit", agent="drive:researcher", file_path=str(self.repo / "README.md"),
+                                      old_string="a", new_string="b"))
