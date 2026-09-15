@@ -6,7 +6,7 @@ implementation, independent adversarial verification, UI verification with visio
 failure investigation distilled into lessons, and compounding those lessons back into the skill. It
 scales from a one-line fix to a greenfield product without ceremony that does not pay for itself.
 
-Last updated 2026-09-14 by the coordinating session.
+Last updated 2026-09-15 by the coordinating session.
 
 ## Where things stand
 
@@ -14,39 +14,53 @@ The skill is complete and committed under `skill/`: SKILL.md (the spine), twelve
 pinned models, the references, shape files, domain packs and templates, `scripts/drive.py` with its
 test suite, `hooks/hooks.json` (which registers the Stop gate, the guard and the snapshot hooks), the
 plugin manifest, and the eval suite. `install.sh` links it as `~/.claude/skills/drive` and prints the
-per-run launch settings.
+per-run launch settings. The suite passes on Python 3.13 and on the macOS system Python 3.9, and
+`selfcheck`, `lesson-check` and `claude plugin validate` pass.
 
 Drive uses exactly three models, pinned by full ID: `claude-fable-5-1` for the orchestrator and the
 final audit, `claude-opus-5` for design, verification, security, UI review and investigation, and
 `claude-sonnet-5` for research, implementation and low-effort grading. No other model is selected;
 `skill/scripts/tests/test_model_ids.py` fails if any shipped file says otherwise or if the price
-table drifts. Prices, effort levels and the cost envelopes in `references/models.md` were checked
-against the live documentation and recomputed in `research/33-model-cost-audit.md`, and recomputed
-again independently in `research/34-adversarial-review.md`.
+table drifts.
 
-The last full review, `research/34-adversarial-review.md`, found one critical defect (the guard
-refused the heredoc every reviewer uses to write its verdict), six high and a set of medium and low
-findings. All of them were fixed the same day, and a second clean review of those fixes,
-`research/37-fix-review.md`, found two high findings the heredoc fix had introduced (a here-string
-hid the lines after it, and heredoc bodies fed to a shell or interpreter went unjudged), four medium
-and six low. Those were fixed too, along with a real bug the test runs exposed: GOAL.md's reader
-turned an all-digit short sha with a leading zero into a number. `research/35-code-fixes-for-docs.md`
-lists every behaviour change the fixes made. The suite has 393 tests and passes on Python 3.13 and on
-the macOS system Python 3.9; `selfcheck`, `lesson-check` and `claude plugin validate` pass. The eval
-suite has 19 cases.
+Two reviews on 2026-09-14 (`research/34-adversarial-review.md` and `research/37-fix-review.md`) and
+their fixes are described in `research/35-code-fixes-for-docs.md`. On 2026-09-15 three further things
+happened:
+
+- **The eval suite was scored for the first time.** Running `claude plugin eval` with `HOME` pointed
+  at an empty directory avoids the sandbox's refusal when `~/.docker` holds symbolic links
+  (`skill/evals/README.md` section 2). One pass over the 19 cases cost $81 and scored 11 at 1.0; the
+  traces showed mostly grader defects, which were fixed and confirmed by re-running the affected
+  cases. No three-run gating run has been done.
+- **Drive ran a complete project.** It built `linkkeeper`, a self-hosted bookmarks manager, from an
+  empty repository at `/Users/chabotc/Projects/linkkeeper`. The run cost $359 against the owner's
+  $360 stop line, ended `stopped` with 6 claims at Local Proof and 38 at Partial, and its final audit
+  passed. The product runs from a fresh clone and its 410 tests pass. `research/40-linkkeeper-run-review.md`
+  is the full review: what worked, what cost too much, and the dozen drive defects the run exposed,
+  each fixed in drive with a test that fails against the earlier code.
+- **The run's lessons were carried into the skill.** The retro named two candidates it could not
+  afford to verify; they were verified against the run's transcripts, narrowed, and written where the
+  missing instructions live (`research/39-run-lessons-verification.md`). The `build` cost envelopes in
+  `references/models.md` section 7 were rescaled from the run's recorded spend.
 
 ## What is not yet proven
 
-- **No scored eval run exists.** `claude plugin eval` refuses Bash-granting cases on the machine
-  where the skill was written because `~/.docker` contains symbolic links (Docker Desktop and
-  OrbStack). Run the suite on a machine without that, or after moving the links, before trusting
-  the graders; `skill/evals/README.md` lists each case's idle score.
-- **No real run exists.** The cost envelopes are modelled. The first runs should replace them with
-  recorded `total_cost_usd` figures.
+- **Planning cost at size M.** The linkkeeper run spent about three hours on intake, research, spec,
+  design and test plan before any code, each planning artifact using three review rounds, and per-package
+  verification then failed most units once or twice. `research/40` recommends a lower round bound
+  and wave-level verification as the default at M; neither is applied yet.
+- **The cost envelopes rest on one run.** Only the `build` row was rescaled; the other rows are still
+  modelled.
+- **No gating eval run.** The suite has single-run scores only; `skill/evals/README.md` section 3 has
+  the two-arm, three-run procedure.
+- **UI verification with vision has not run end to end.** The linkkeeper run cut its UI review to fit
+  the budget, so no `drive:ui-reviewer` capture exists yet.
 - **Unverified harness facts** are listed at the end of report 34: whether a background session has
   the iOS Simulator and Browser pane tools, whether `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` in the
   `--settings` env block takes effect, and whether a subagent can invoke the bundled
-  `security-review` skill.
+  `security-review` skill. The headless linkkeeper run found the bundled security-review, simplify,
+  code-review and workflow-authoring skills unavailable and substituted drive's own agents.
+- **Owner decision pending:** which recommendations from `research/38-pstack-evaluation.md` to apply.
 
 ## Where to read
 
@@ -60,10 +74,11 @@ suite has 19 cases.
   provenance makes tampering evident afterwards; deliberate shell obfuscation is out of scope.
 - `research/25` to `32`: the drafting brief and successive review rounds.
 - `research/30-compare-mission-vs-drive.md`: comparison with the earlier `mission` skill.
-- `research/33-model-cost-audit.md`, `34-adversarial-review.md`, `35-code-fixes-for-docs.md`,
-  `36-completion-handoff.md`, `37-fix-review.md`: the model and cost audit, the whole-project
-  review, the behaviour changes it produced, the completion checklist (now done), and the review of
-  the fixes.
+- `research/33` to `37`: the model and cost audit, the whole-project review, the behaviour changes it
+  produced, the completion checklist (done), and the review of the fixes.
+- `research/38-pstack-evaluation.md`: what drive could take from cursor/plugins pstack (not applied).
+- `research/39-run-lessons-verification.md` and `research/40-linkkeeper-run-review.md`: the first
+  complete run and the lessons carried from it.
 
 ## Checks to run after any change
 
@@ -83,4 +98,4 @@ python3 skill/scripts/drive.py lesson-check
 claude plugin validate skill
 ```
 
-The suite takes about three minutes and must also pass on the macOS system Python (3.9).
+The suite takes about four minutes and must also pass on the macOS system Python (3.9).

@@ -192,11 +192,20 @@ modelled role by role; the others scale the earlier figures by the ratio those c
 first real runs should replace them: a headless run records `total_cost_usd`, and a background run's
 cost is in `/usage`.
 
+The first measured run (`research/40-linkkeeper-run-review.md`, 2026-09-15) was a `build` at M with 44
+claims and 15 packages: it recorded $359 and about seven hours, stopped at its dollar line with 6
+claims at Local Proof and 38 at Partial, and spent roughly three hours on intake, research, spec,
+design and test plan before the first code, each planning artifact using three review rounds. The
+`build` row is rescaled from that run and is still one data point; a complete M build with a UI
+review and per-package verification lands at the top of its range or above. Any figure a run writes
+as spend comes from a recorded `total_cost_usd`, `/usage`, or the harness budget line; when none is
+available the line says "not measured" rather than giving an estimate as a cost.
+
 | Shape | XS | S | M | L | XL |
 |---|---|---|---|---|---|
 | `fix` | $3 to $6 | $20 to $40 | $50 to $120 | $90 to $200 | reclassify |
 | `feature` | $3 to $6 | $30 to $50 | $130 to $270 | $300 to $550 | $600 to $1,100 |
-| `build` | not used | $30 to $80 | $130 to $270 | $300 to $750 | $650 to $1,600, more on a bad run |
+| `build` | not used | $30 to $80 | $350 to $700, measured | $600 to $1,300 | $1,200 to $3,000, more on a bad run |
 | `move` | $5 to $10 | $30 to $80 | $110 to $270 | $190 to $490 | $500 to $1,000 |
 | `publish` | $3 to $6 | $20 to $60 | $80 to $240 | $180 to $420 | $350 to $700 |
 | `report` | $3 to $6 | $10 to $40 | $25 to $60 | $75 to $180 | $180 to $380 |
