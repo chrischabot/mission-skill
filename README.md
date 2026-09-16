@@ -45,8 +45,11 @@ was checked, and the rule that would have prevented it to `.drive/LEARNINGS.md`;
 and appends verified rules that hold in any project to `skill/references/lessons/learned.md`,
 deduplicated and committed with a one-line source. A lean run keeps honest reporting, no fakes
 presented as live, the credential and destructive-action boundaries, commits on the current branch
-with no branches or pushes, a short STATE.md, and a budget line that is a hard stop. The hooks check a
-lean run only for a STATE.md with a status, a next step, and no future timestamp.
+with no branches, pushes that branch after every reviewed package so a run that loses its process
+resumes from the repository, keeps a short STATE.md, and treats its budget line as a target to
+checkpoint at, never a stop: only a `stop:` line the owner wrote ends a run early. The hooks check a
+lean run for a STATE.md with a status, a next step, and no future timestamp, and hold it once the
+owner's stop line is reached.
 
 ### Rigorous mode
 
@@ -67,8 +70,9 @@ transcript shows the tool call that wrote the file, so a verdict the orchestrato
 not count at the lint. The plugin's Stop hook keeps the run's own sessions working while STATE.md
 says the run is unfinished, and lets a turn end only on the conditions
 `skill/references/long-running.md` section 5 lists. The run commits on the current branch. The guard
-refuses `git push` from any directory, and any command that creates or moves a branch or tag in a
-worktree that shares the repository's refs, and `drive.py lint --stop` fails on any worktree, branch,
+refuses `git push` from any directory in a rigorous run (a lean run's orchestrator may push the
+branch it is on to its upstream, plain and never forced), and any command that creates or moves a
+branch or tag in a worktree that shares the repository's refs, and `drive.py lint --stop` fails on any worktree, branch,
 or uncommitted path the run created; the owner's own, recorded when the run started, are left alone.
 
 These mechanisms have limits worth knowing before you trust an unattended result. Drive's hooks run
@@ -95,9 +99,10 @@ final audit are what to read; the lint and the ledger make a shortcut visible ra
 
 Some endings are expected rather than failures. A claim that only a physical device can prove never
 reaches Done, so a native iOS run with device-only rows ends `stopped`, honestly, with those rows at
-the rung the simulator supports and the device step named for you. Nothing enforces a dollar cap in a
-background session: the budget line's subagent count limits maker spawns, and the dollar envelope is
-an estimate that only a headless run's `--max-budget-usd` enforces. A run that waits out a soak
+the rung the simulator supports and the device step named for you. Nothing caps spend: the budget
+line is a target the run checkpoints at, the subagent count is a second checkpoint figure, and a
+headless leg's `--max-budget-usd` ends one session rather than the run; only a `stop:` line the owner
+wrote ends a run early. A run that waits out a soak
 resumes itself only through a scheduler that can start a Claude session; on a machine with an
 API-key login and no Desktop app, where a CI job is the only scheduler, the soak check still acts, and
 you resume the run by hand with `/drive --resume` once the window ends.
@@ -154,7 +159,7 @@ either did not take effect it stops with the relaunch command for you to run. A 
 background agents; `0` would wait forever.
 `skill/references/long-running.md` has the full per-run settings (the environment, and the skill
 repository plus any other repository the run writes to under `additionalDirectories`), the headless
-recipe with its spend envelope across legs, keep-awake, resume by session id, and when a cloud
+recipe with its leg loop, keep-awake, resume by session id, and when a cloud
 hand-off is possible.
 
 ## Repository layout

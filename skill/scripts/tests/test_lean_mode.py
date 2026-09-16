@@ -2,6 +2,7 @@
 
 The point of these tests is that a lean run is never held up by the checks that belong to rigorous mode, while a rigorous
 run keeps every one of them."""
+import datetime as dt
 import json
 import re
 from pathlib import Path
@@ -16,8 +17,10 @@ status: {status}
 phase: build
 next: {next}
 updated: {updated}
-budget: $25 hard stop · 1 h · 12 subagents
-spend: not measured
+budget: $25 target · 1 h · 12 subagents
+stop: {stop}
+spend: {spend}
+pushed: none
 in flight: none
 
 ## Open items
@@ -37,8 +40,10 @@ class LeanCase(DriveTestCase):
             self.commit(repo, "drive(plan): notes-since")
         return repo
 
-    def set_lean_state(self, repo, status="running", nxt="Spawn drive:implementer for P1.", updated=None):
-        self.write(repo, ".drive/STATE.md", LEAN_STATE.format(goal=GOAL, status=status, next=nxt, updated=updated or iso()))
+    def set_lean_state(self, repo, status="running", nxt="Spawn drive:implementer for P1.", updated=None, stop="none",
+                       spend="not measured"):
+        self.write(repo, ".drive/STATE.md", LEAN_STATE.format(goal=GOAL, status=status, next=nxt, updated=updated or iso(),
+                                                              stop=stop, spend=spend))
 
     def stop(self, repo, **payload):
         data = {"hook_event_name": "Stop", "cwd": str(repo), "stop_hook_active": False, "prompt_id": "p-{}".format(id(payload)),
@@ -156,6 +161,96 @@ class LeanStopGateTests(LeanCase):
         decision = self.stop(repo)
         self.assertEqual(decision["decision"], "block")
         self.assertIn("next:", decision["reason"])
+
+
+class LeanBudgetTests(LeanCase):
+    """A budget target is a checkpoint, and only the owner's stop: line ends a run early (SKILL.md section 8)."""
+
+    def test_spend_past_the_target_with_no_stop_line_warns_and_the_run_goes_on(self):
+        repo = self.make_lean_run()
+        self.set_lean_state(repo, spend="$61.20 from total_cost_usd")
+        findings = self.lint(repo, "stop")
+        self.assertNoFailure(findings)
+        self.assertIn("checkpoint is due", self.messages(findings, "warn"))
+        decision = self.stop(repo)
+        self.assertEqual(decision["decision"], "block")
+        self.assertIn("Spawn drive:implementer for P1", decision["reason"])
+        self.assertNotIn("stop line", decision["reason"])
+
+    def test_spend_past_the_owners_dollar_stop_line_holds_the_run_until_it_stops(self):
+        repo = self.make_lean_run()
+        self.set_lean_state(repo, stop="$50", spend="$40 from total_cost_usd")
+        self.assertNoFailure(self.lint(repo))
+        self.set_lean_state(repo, stop="$50", spend="$61.20 from total_cost_usd")
+        self.assertFails(self.lint(repo), "the owner's stop line is reached")
+        decision = self.stop(repo)
+        self.assertEqual(decision["decision"], "block")
+        self.assertIn("stop line is reached", decision["reason"])
+        self.set_lean_state(repo, status="stopped", stop="$50", spend="$61.20 from total_cost_usd")
+        self.assertNoFailure(self.lint(repo))
+        self.assertIsNone(self.stop(repo))
+
+    def test_a_dollar_stop_line_with_no_recorded_spend_only_warns(self):
+        repo = self.make_lean_run()
+        self.set_lean_state(repo, stop="$50")
+        findings = self.lint(repo)
+        self.assertNoFailure(findings)
+        self.assertIn("cannot be judged", self.messages(findings, "warn"))
+
+    def test_wall_clock_and_date_stop_lines(self):
+        repo = self.make_lean_run()
+        marker = repo / ".drive/local/active"
+        data = json.loads(marker.read_text())
+        data["started"] = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        marker.write_text(json.dumps(data) + "\n")
+        self.set_lean_state(repo, stop="3 h")
+        self.assertFails(self.lint(repo), "the run started")
+        self.set_lean_state(repo, stop="2 days")
+        self.assertNoFailure(self.lint(repo))
+        self.set_lean_state(repo, stop="2020-01-01")
+        self.assertFails(self.lint(repo), "it is now")
+        self.set_lean_state(repo, stop="2999-01-01T09:00Z")
+        self.assertNoFailure(self.lint(repo))
+
+    def test_a_report_that_stops_on_spend_with_no_stop_line_fails(self):
+        repo = self.make_lean_run()
+        self.set_lean_state(repo, status="stopped", spend="$130 from total_cost_usd")
+        self.write(repo, ".drive/REPORT.md", "# REPORT · notes-since\n\n## Outcome\nStopped because the $120 budget was "
+                                            "reached with one of nine packages verified. The rest is planned.\n")
+        self.assertFails(self.lint(repo), "A budget is a checkpoint, not a stop")
+        self.write(repo, ".drive/REPORT.md", "# REPORT · notes-since\n\n## Outcome\nStopped because the export needs a "
+                                            "credential only the owner holds.\n")
+        self.assertNoFailure(self.lint(repo))
+        self.set_lean_state(repo, status="stopped", stop="$120", spend="$130 from total_cost_usd")
+        self.write(repo, ".drive/REPORT.md", "# REPORT · notes-since\n\n## Outcome\nStopped because the owner's stop line "
+                                            "of $120 was reached.\n")
+        self.assertNoFailure(self.lint(repo))
+
+    def test_the_orchestrator_pushes_its_own_branch_and_nothing_else(self):
+        repo = self.make_lean_run()
+
+        def push(command, agent=None, cwd=None):
+            payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": command}, "cwd": str(cwd or repo)}
+            if agent:
+                payload.update(agent_type=agent, agent_id="a1")
+            return self.hook("hook-guard", payload).returncode
+
+        for command in ("git push", "git push origin main", "git push -u origin main", "git push --set-upstream origin main",
+                        "git commit -q -m 'x' && git push origin main"):
+            self.assertEqual(push(command), 0, command)
+        for command in ("git push --force origin main", "git push -f", "git push --force-with-lease origin main",
+                        "git push origin main:other", "git push origin HEAD:refs/heads/x", "git push origin feature",
+                        "git push --delete origin main", "git push --tags", "git push --all", "git push origin main extra"):
+            self.assertEqual(push(command), 2, command)
+        for agent in ("drive:implementer", "drive:reviewer", "drive:planner"):
+            self.assertEqual(push("git push origin main", agent=agent), 2, agent)
+        rigorous = self.tmp / "rigorous"
+        rigorous.mkdir()
+        self.git(rigorous, "init", "-q", "-b", "main")
+        self.write(rigorous, "README.md", "# proj\n")
+        self.commit(rigorous, "chore: start")
+        self.assertEqual(self.run_drive("init", "--size", "S", "--goal", GOAL, cwd=rigorous).returncode, 0)
+        self.assertEqual(push("git push origin main", cwd=rigorous), 2, "a rigorous run still pushes nothing")
 
 
 class LeanEndTests(LeanCase):

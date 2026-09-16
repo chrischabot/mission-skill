@@ -118,10 +118,17 @@ class SubstitutionHeredocTests(Hooks, DriveTestCase):
 class StopTokenWordingTests(Hooks, DriveTestCase):
     """M2, M3, L5, L1: credentials:, budget:, and Abort need the words the rule names, not a mention."""
 
-    def blocked(self, repo, blocked_on):
+    def blocked(self, repo, blocked_on, spend=None):
         self.set_state(repo, commit=self.code_sha, status="blocked", blocked=blocked_on)
+        if spend:
+            state = (repo / ".drive/STATE.md").read_text()
+            self.write(repo, ".drive/STATE.md", state.replace("model: claude-fable-5-1 · high\n", "model: claude-fable-5-1 · high\nspend: {}\n".format(spend), 1))
         self.write(repo, ".drive/REPORT.md", self.report_md({}, outcome="Stopped because the owner must act."))
         return self.stop(repo)
+
+    def set_stop(self, repo, value):
+        goal = (repo / ".drive/GOAL.md").read_text().replace("\nbudget:", "\nstop: {}\nbudget:".format(value), 1)
+        self.write(repo, ".drive/GOAL.md", goal)
 
     def test_credentials_refuses_words_that_name_no_secret(self):
         repo = self.make_run()
@@ -136,25 +143,25 @@ class StopTokenWordingTests(Hooks, DriveTestCase):
             with self.subTest(blocked_on=blocked_on):
                 self.assertIsNone(self.blocked(repo, blocked_on))
 
-    def test_budget_refuses_a_decision_that_only_mentions_the_budget(self):
+    def test_budget_needs_the_owners_stop_line_and_no_decision_stands_in_for_it(self):
         repo = self.make_run()
-        self.append_decision(repo, "Keep going", "continue; the budget is fine.")
-        self.assertIn("counts only once", self.blocked(repo, "budget: done enough")["reason"])
         self.append_decision(repo, "Narrow to the token check", "Narrow the run to the token check; the budget no longer covers the admin screen.")
-        self.assertIsNone(self.blocked(repo, "budget: done enough"))
-
-    def test_a_budget_stop_that_reuses_an_intake_heading_counts(self):
-        repo = self.make_run()
-        # Re-anchor intake after DECISIONS.md holds "Compare tokens in constant time".
-        self.git(repo, "commit", "-q", "--allow-empty", "-m", "drive(intake): session-auth")
-        self.append_decision(repo, "Compare tokens in constant time", "stop; the budget no longer covers more.")
-        self.assertIsNone(self.blocked(repo, "budget: done enough"))
-
-    def test_a_budget_decision_present_at_intake_still_does_not_count(self):
-        repo = self.make_run()
         self.append_decision(repo, "Stop early", "stop; the budget no longer covers more.")
-        self.commit(repo, "drive(intake): session-auth")
-        self.assertIn("counts only once", self.blocked(repo, "budget: done enough")["reason"])
+        reason = self.blocked(repo, "budget: done enough", spend="$61.20 from total_cost_usd")["reason"]
+        self.assertIn("counts only once the owner's stop: line is reached", reason)
+        self.assertIn("carry no stop: line", reason)
+
+    def test_budget_counts_once_the_recorded_spend_reaches_the_owners_dollar_stop_line(self):
+        repo = self.make_run()
+        self.set_stop(repo, "$50")
+        self.assertIn("is not reached yet", self.blocked(repo, "budget: done enough", spend="$40 from total_cost_usd")["reason"])
+        self.assertIn("is not reached yet", self.blocked(repo, "budget: done enough")["reason"])
+        self.assertIsNone(self.blocked(repo, "budget: done enough", spend="$61.20 from total_cost_usd"))
+
+    def test_a_stop_line_that_says_none_is_no_stop_line(self):
+        repo = self.make_run()
+        self.set_stop(repo, "none")
+        self.assertIn("carry no stop: line", self.blocked(repo, "budget: done enough", spend="$900 from total_cost_usd")["reason"])
 
     def test_abort_refuses_a_negation_and_accepts_abort_with_punctuation(self):
         repo = self.make_run()

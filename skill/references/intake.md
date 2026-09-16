@@ -415,12 +415,12 @@ is M by component count, with `large-surface`. A one-module refactor that could 
 | L | adds RESEARCH.md, DESIGN.md, LESSONS.md | adds research lanes, separate spec, design, and test strategy reviews by `drive:auditor` of up to three full rounds each, a verifier per package, and for build a walking skeleton proven live at the end of wave 0 | `drive:auditor`, for every shape | a requirement for every `live` y row | 100 turns, 90 subagents, 12 hours |
 | XL | as L | adds phase gates with a re-classification review by `drive:auditor`, workflow fan-out for bulk, and per-phase bounds | as L | required per surface | 250 turns, 200 subagents, several days |
 
-Budgets are starting envelopes in turns, subagents, and wall clock; the dollar envelope comes from
-`references/models.md`. The lint counts only maker spawns against the subagent figure
-(`drive:implementer`, `drive:writer`, `drive:designer`, `drive:architect`, `drive:researcher`), so the
-reviews a size requires (verifiers, graders, the UI, severe, and security reviews, and the final
-audit) never push a run past it; past twice the figure the gate fails until DECISIONS.md records the
-overrun with a `Narrows:` line naming what was cut.
+Budgets are starting targets in turns, subagents, and wall clock; the dollar target comes from
+`references/models.md`. A target is a checkpoint, not a stop. The lint counts only maker spawns
+against the subagent figure (`drive:implementer`, `drive:writer`, `drive:designer`, `drive:architect`,
+`drive:researcher`), so the reviews a size requires (verifiers, graders, the UI, severe, and security
+reviews, and the final audit) never push a run past it, and past the figure it warns and names the
+checkpoint work rather than failing. Only a `stop:` line the owner wrote in GOAL.md ends a run early.
 
 ## 10. Derive the plan
 
@@ -440,7 +440,7 @@ overrun with a `Narrows:` line naming what was cut.
    STATUS rows you already know with their `live` value (at S, all of them; at M and above the spec
    adds the rest, and each row's `live` is fixed when it is created). Write any target below the
    shape's default beside its claim now, with the reason.
-7. Write the budget line.
+7. Write the budget line, and the `stop:` line with what the owner's goal names, otherwise `none`.
 8. At M and above, spawn a fresh `drive:architect` in review mode with the goal verbatim, the probe
    output, and the draft GOAL.md, asking whether shape, variant, size trigger, and traits follow from
    this file. It writes `.drive/reviews/<date>-intake-review-r1.md` from `templates/review.md`, with
@@ -471,6 +471,7 @@ run most often disagree. Filled example:
 goal: "Add CSV export to the invoices list in the admin app. Finance needs it before quarter close. Keep the existing PDF export as it is."
 live means: the staging deployment named in deploy/staging.toml, exercised from a browser against its real database
 budget: 40 turns · 40 subagents · 3 h · usd per references/models.md
+stop: none
 
 ## Restate
 - outcome: "CSV export to the invoices list in the admin app"

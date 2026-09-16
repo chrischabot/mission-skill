@@ -226,7 +226,8 @@ leaves something to reconcile.
 # GOAL · <goal slug>
 goal: "<verbatim prompt>"
 live means: <what live is for this project, decided at intake>
-budget: <turns, subagents, wall clock, usd envelope>
+budget: <turns, subagents, wall clock, usd target>
+stop: <none, or the owner's dollar figure, wall clock, or date>
 
 ## Restate
 outcome: / user: / why now: / success: / constraints: / out of scope:   (one line each)
@@ -306,8 +307,8 @@ what else is under way goes in `next:` and "In flight".
 `done` and `stopped` need `lint --final` to pass; `blocked` needs the Blocked on line to begin with
 one of `budget:`, `impossible:`, `destructive:`, `credentials:`, `payment:`, `legal:`, `account:`,
 `two-diagnoses:`, or `soak:` followed by the condition in words (the stop conditions in `references/rigorous.md`
-section 9), and REPORT.md to say "Stopped because", where `budget:` counts only once maker spawns
-reached the subagent figure on GOAL.md's budget line or a DECISIONS.md entry added since intake has a `Decision:` line that begins with `Stop` or `Narrow` and names the budget (an entry counts as added when its heading and body were not at intake, so a reused heading still counts), and `credentials:` must name
+section 9), and REPORT.md to say "Stopped because", where `budget:` counts only once the
+`stop:` line the owner wrote in GOAL.md is reached (the budget line itself is a checkpoint, never a stop), and `credentials:` must name
 the secret as an uppercase identifier containing an underscore or ending in `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `PAT`, `CREDENTIALS`, or `CERT` (`credentials: CLOUDFLARE_API_TOKEN`), or as a name of two or more letters in backquotes or double quotes, so `credentials: none`, `TBD`, `TODO`, `N/A`, and `UNKNOWN` are refused; or the Blocked on line to begin
 `launch preflight:` and quote the `claude` relaunch command in backticks or quotes, which counts only
 when the latest `drive.py preflight` the ledger records for this session failed; `aborted` needs
@@ -397,7 +398,7 @@ finding and exits 1 on any failure. Fix what it reports; never edit a file to hi
 | Registry | when STATE.md names `registry:`, that command runs and must exit 0 at every `--gate` and at `--final` |
 | Review files | at `--gate intake` at M and above, at every `spec`, `design`, and `test-plan` gate, and at a gate whose plan line names `checker: architect` or a fresh review, a `.drive/reviews/<date>-<phase>-review-r<n>.md` (the sub-goal slug after the phase for a scoped gate) whose first lines hold `verdict: ready` or `verdict: not ready` and a `round: <n>/<bound>` matching its name; a final-audit go written by the agent instance that wrote the earlier no-go is refused |
 | `--gate <phase>` adds | that phase's exit criteria: for example `capabilities.json` at intake for M and above, `how-it-works.md` with a drift table at archaeology, a `test:`, `severe:`, or `planned:` token on every row at test-plan, disjoint ownership at decompose, every active row at Partial after build, fix, draft, or execute and at Local Proof after verify, harden, design-qa, and integrate, and live rows at Live Proof after live-proof, deploy, and cutover (a `why:device-only:` row at Local Proof); integrate also runs the `--stop` hygiene checks; `--sub <slug>` checks only the rows carrying `sub:<slug>` and takes the size from that sub-goal's classification |
-| GOAL.md budget | at every gate, the maker subagent starts (`drive:implementer`, `drive:writer`, `drive:designer`, `drive:architect`, `drive:researcher`) the ledger recorded since `init`, counted against the number before `subagents` on the budget line; reviewer starts are reported and never counted: a warning past the count, a failure past twice it until a DECISIONS.md entry that mentions the budget, an overrun, or the envelope carries a `Narrows:` line other than `none` naming what was cut |
+| GOAL.md budget | at every gate, the maker subagent starts (`drive:implementer`, `drive:writer`, `drive:designer`, `drive:architect`, `drive:researcher`) the ledger recorded since `init`, counted against the number before `subagents` on the budget line; reviewer starts are reported and never counted: a warning past the count that names the checkpoint work, and never a failure; separately, a `stop:` line the owner wrote and reached fails a running run until it stops, and a report that stops the run on spend before then fails |
 | DECISIONS.md | no entry present at HEAD removed or altered; Decision and Undo on every entry |
 | `.drive/` outside `local/` | no secret-shaped string (`sk-`, `ghp_`, `AKIA`, `-----BEGIN`, a long bearer token) |
 | `--stop` adds | no uncommitted or untracked path outside `.drive/local/` that `.drive/local/baseline.json` neither lists nor holds under one of its untracked directories (with no baseline, every such path fails, `.drive/` state files included); `.gitignore` ignores `.drive/local/`; no linked worktree and no local branch the baseline does not list, a `worktree-*` branch that a background worktree created included (with no baseline, any `drive/*`, `pkg/*`, or `worktree-*` branch fails); no `.drive/local/workers/*/report.md` newer than `updated` |

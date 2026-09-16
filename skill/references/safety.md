@@ -170,8 +170,9 @@ Never ask again about the same unit in the same run.
   local or disposable environments, or against infrastructure GOAL.md records as the owner's.
   Never against third-party services, shared environments that belong to others, or addresses
   nobody has confirmed. The run never publishes, posts, opens pull requests, or comments on the
-  owner's behalf. It never pushes, from any directory, and in no worktree that shares the repository's
-  refs does it create or move a branch or tag. The guard lets the main thread run a `gh pr`,
+  owner's behalf. A rigorous run never pushes, from any directory, and a lean run's orchestrator pushes only
+  the branch it is on to its upstream, plain and never forced; in no worktree that shares the
+  repository's refs does a run create or move a branch or tag. The guard lets the main thread run a `gh pr`,
   `gh release`, or `gh repo` write only when a `deploy` plan line in GOAL.md names that command.
 - **Retention for cloud runs.** Fable 5.1 requires 30-day data retention and is unavailable to
   organisations on zero data retention. Cloud sessions and routines clone the repository onto

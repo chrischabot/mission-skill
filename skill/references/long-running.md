@@ -67,8 +67,9 @@ A closed laptop lid sleeps the machine, and a sleeping machine runs nothing. Say
 ## 2. Launch recipes
 
 The recipes below launch a rigorous run at `--effort high`. A lean run, the default, uses the same
-commands with `--effort medium` and a goal without `--rigorous`; its budget line comes from the lean
-envelopes in `references/models.md`.
+commands with `--effort medium` and a goal without `--rigorous`; its budget target comes from the
+lean envelopes in `references/models.md`, and its `stop:` line from the owner's goal, otherwise
+`none`.
 
 The owner runs these from the repository root, and the orchestrator runs the background recipe
 itself when it launches a run elsewhere. They set the model, effort, and permission mode for the
@@ -184,14 +185,17 @@ env CLAUDE_CODE_STOP_HOOK_BLOCK_CAP=30 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=1080
 ```
 
 For a run expected to last more than a day, run headless in legs so each leg is a fresh session
-reading state from files. `--max-budget-usd` caps one leg, so the loop also keeps the total: before
-each leg it adds up `total_cost_usd` from every result event in the log, writes the sum to
-`.drive/local/run.md`, stops when the sum reaches GOAL.md's envelope, and passes only what remains
-as the next leg's cap. The first leg is the command above; each later leg replaces the prompt with
-`/drive --resume` and drops `--session-id`.
+reading state from files. `--max-budget-usd` caps one leg only, and a leg that ends on it is not a
+stopped run: the loop keeps going for as long as STATE.md says the run is unfinished. Before each
+leg it adds up `total_cost_usd` from every result event in the log and writes the sum to
+`.drive/local/run.md` as `spent $<n>`, which `drive.py` reads as the recorded spend, so the next
+leg's resume does the checkpoint when the sum has passed the budget target, and the loop stops only
+when the sum has reached a dollar figure on the owner's `stop:` line. The first leg is the command
+above; each later leg replaces the prompt with `/drive --resume` and drops `--session-id`.
 
 ```bash
-ENVELOPE=<top of GOAL.md's dollar envelope>
+LEG_CAP=<one leg's --max-budget-usd, sized to about a day of work>
+STOP=<the dollar figure on GOAL.md's stop: line, or empty when it names none>
 for leg in $(seq 1 <max legs>); do
   grep -Eq '^status: (running|verifying)$' .drive/STATE.md || break
   spent=$(python3 - <<'PY'
@@ -210,16 +214,18 @@ except OSError:
 print(f'{total:.2f}')
 PY
 )
-  left=$(python3 -c "print(f'{max(0.0, $ENVELOPE - $spent):.2f}')")
-  echo "$(date -u +%FT%TZ) leg $leg: spent \$$spent of \$$ENVELOPE" >> .drive/local/run.md
-  python3 -c "import sys; sys.exit(0 if $left > 0 else 1)" || { echo "envelope reached; no further legs" >> .drive/local/run.md; break; }
-  env <the same variables> claude -p "/drive --resume" <the same flags, with --max-budget-usd "$left" and --max-turns sized to about a day of work> \
+  echo "$(date -u +%FT%TZ) leg $leg: spent \$$spent so far" >> .drive/local/run.md
+  if [ -n "$STOP" ]; then
+    python3 -c "import sys; sys.exit(0 if $spent < $STOP else 1)" || { echo "the owner's stop line (\$$STOP) is reached; no further legs" >> .drive/local/run.md; break; }
+  fi
+  env <the same variables> claude -p "/drive --resume" <the same flags, with --max-budget-usd "$LEG_CAP" and --max-turns sized to about a day of work> \
     >> .drive/local/logs/stream.jsonl 2>&1
 done
 ```
 
-When the loop stops on the envelope, the next resume records the overrun in DECISIONS.md and
-narrows or stops, as `references/rigorous.md` section 9 says.
+When the loop stops on the owner's stop line, the next resume writes the report, sets
+`status: stopped`, and runs `drive.py end`. A loop that ends because `<max legs>` ran out has not
+stopped the run either: start it again, and it resumes from the repository.
 
 **Resume.** Continue the same conversation by its id, never its name:
 `claude --resume <session id> --bg --model claude-fable-5-1 --effort high --permission-mode auto --settings "$DRIVE_SETTINGS" "/drive --resume"`.
@@ -275,7 +281,7 @@ Then the checks preflight does not cover:
 | Billing and cache | `[ -n "$ANTHROPIC_API_KEY" ]`, or `apiKeyHelper` or `"forceLoginMethod": "console"` in `~/.claude/settings.json` | With an API key and no one-hour cache, record the cost risk (`models.md`). |
 | Capabilities | `$DRIVE capabilities`, then the ToolSearch probe and merge in `capabilities.md` section 1 | A rerun rewrites the file and keeps only `git:baseline_sha`, so every resume merges the `mcp:` and `resolved:` keys again. A missing verification capability lowers the ceiling of the claims it would verify. |
 | Cloud availability | the billing check above | With an API key, record "Cloud hand-off unavailable with API-key login; the run stays local." |
-| Budget | GOAL.md `budget:` line, including a subagent count | Fill it from the envelopes in `models.md`. |
+| Budget | GOAL.md `budget:` line, including a subagent count, and its `stop:` line | Fill the target from the envelopes in `models.md`; the stop line holds what the owner's goal names, otherwise `none`. |
 | Classifier exposure | security or biology material in the repository | Apply `safety.md` before the first review or test phase. |
 
 ## 4. Keep-awake
@@ -314,7 +320,7 @@ goes to `.drive/local/gate.log`. No status line opens it by being declared.
 | A running `drive:` subagent, or a background shell, monitor, or workflow whose task id or whole command appears on STATE.md's "In flight" line | Allows; the completion notification starts your next turn. A description or name on that line does not count. An unrelated subagent (Explore, another plugin's agent), a task from before the run, or a task "In flight" does not name keeps the gate closed, and a `caffeinate`, `sleep`, `yes`, `tail -f`, or `true` task never opens it. |
 | STATE.md `status: running` or `verifying` | Blocks, with the recorded `next:` and any `lint --stop` findings as the reason. |
 | `status: done` or `stopped` | Allows only if `lint --final` passes, reading the ledger's record of the full-suite run rather than re-running it; otherwise blocks with the findings. Run `$DRIVE lint --final` yourself first so that record exists for the latest code commit. |
-| `status: blocked` | Allows only when "Blocked on" begins with one of these tokens followed by the condition in words, and REPORT.md says "Stopped because": `budget:` (a budget bound, accepted only once the maker spawns reached the subagent figure on GOAL.md's budget line or a DECISIONS.md entry added since intake has a `Decision:` line that begins with `Stop` or `Narrow` and names the budget), `impossible:` (the goal is impossible as stated), `destructive:` (a destructive or irreversible step the goal does not imply, including the one question), `credentials:` (naming the secret as an uppercase identifier containing an underscore or ending in `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `PAT`, `CREDENTIALS`, or `CERT`, as in `credentials: CLOUDFLARE_API_TOKEN`, or as a name of two or more letters in backquotes or double quotes; `none`, `TBD`, `TODO`, `N/A`, `NA`, and `UNKNOWN` are refused in any form), `payment:`, `legal:` (legal acceptance), `account:` (account creation), `two-diagnoses:` (a failure that survived two distinct diagnoses), or `soak:` (section 11). The one exception is a failed launch preflight: when "Blocked on" begins `launch preflight:` and quotes the relaunch command, a `claude` command in backticks or quotes, the gate allows with no report, but only when the latest `$DRIVE preflight` the ledger records for this session failed. |
+| `status: blocked` | Allows only when "Blocked on" begins with one of these tokens followed by the condition in words, and REPORT.md says "Stopped because": `budget:` (the `stop:` line the owner wrote in GOAL.md reached; the budget target itself is a checkpoint and never a stop), `impossible:` (the goal is impossible as stated), `destructive:` (a destructive or irreversible step the goal does not imply, including the one question), `credentials:` (naming the secret as an uppercase identifier containing an underscore or ending in `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `PAT`, `CREDENTIALS`, or `CERT`, as in `credentials: CLOUDFLARE_API_TOKEN`, or as a name of two or more letters in backquotes or double quotes; `none`, `TBD`, `TODO`, `N/A`, `NA`, and `UNKNOWN` are refused in any form), `payment:`, `legal:` (legal acceptance), `account:` (account creation), `two-diagnoses:` (a failure that survived two distinct diagnoses), or `soak:` (section 11). The one exception is a failed launch preflight: when "Blocked on" begins `launch preflight:` and quotes the relaunch command, a `claude` command in backticks or quotes, the gate allows with no report, but only when the latest `$DRIVE preflight` the ledger records for this session failed. |
 | `status: aborted` | Allows only when REPORT.md exists and a DECISIONS.md entry's `Decision:` line begins with `Abort` or `Aborted` followed by `;`, `:`, a comma, a period, or the end of the line, as in `Decision: Abort; <why>`. |
 | `status: stalled` | Allows only when the gate itself set it, which the provenance ledger records against those exact STATE.md bytes. |
 | `.drive/STATE.md` missing, or a status outside the vocabulary | Blocks. |
@@ -494,9 +500,11 @@ Run this at every start, including the first leg of a headless run.
 - `/rewind` checkpoints do not cover Bash changes or subagent edits. Git is the only checkpoint
   that survives a process death and a resume.
 - A point in the run is resumable when HEAD, STATE.md, and STATUS.md agree.
-- The run never pushes, and never creates or moves a branch or tag from the shared checkout or from
-  any worktree that shares the repository's refs, detached ones under a scratch directory included.
-  The guard refuses `git push` for every agent and for you, from every directory, with no exception.
+- A rigorous run never pushes, and no run creates or moves a branch or tag from the shared checkout
+  or from any worktree that shares the repository's refs, detached ones under a scratch directory
+  included. The guard refuses `git push` for every agent, from every directory, and for you in a
+  rigorous run; in a lean run it lets you push the branch you are on to its upstream, plain and never
+  forced, which SKILL.md section 5 asks for after every reviewed package.
   It refuses you the write verbs of `gh pr`, `gh release`, and `gh repo` unless a `deploy` plan line
   in GOAL.md names that command (for example `- [ ] deploy · artifact: the GitHub release · exit:
   gh release create v1.2.0 published · checker: verifier`), and refuses them to every agent always.

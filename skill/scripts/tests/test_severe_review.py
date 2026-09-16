@@ -361,13 +361,15 @@ class InitAndPlanTests(Severe, DriveTestCase):
         text = goal_md("abc1234", size="S") + "\n## Classification · second\n```yaml\nshape: build\nsize: L\n```\n"
         self.assertEqual(drive.Goal(text).size, "L")
 
-    def test_spawns_past_twice_the_budget_fail_the_gate(self):
+    def test_spawns_past_twice_the_budget_warn_and_never_fail_the_gate(self):
         repo = self.make_run()
         payload = {"hook_event_name": "SubagentStart", "cwd": str(repo), "agent_id": "i-hook", "agent_type": "drive:implementer"}
         self.assertEqual(self.hook("hook-snapshot", payload, "start").returncode, 0)
         for number in range(16):
             drive.ledger_append(repo, {"kind": "spawn", "agent_type": "drive:implementer", "agent_id": "i-{}".format(number)})
-        self.assertFails(self.lint(repo, gate="build"), "past twice its envelope")
+        findings = self.lint(repo, gate="build")
+        self.assertNoFailure(findings, "maker subagents")
+        self.assertIn("17 maker subagents have started against a target of 8", self.messages(findings, "warn"))
 
     def test_the_state_template_lists_stopped(self):
         self.assertIn("stopped", (SKILL / "templates" / "STATE.md").read_text().split("## Resume here")[0])

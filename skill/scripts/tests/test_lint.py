@@ -431,7 +431,7 @@ class FinalTests(DriveTestCase):
             lines.append(line)
         self.write(repo, ".drive/STATUS.md", "\n".join(lines) + "\n")
         self.write(repo, ".drive/REPORT.md", self.report_md({"Done": 1, "Partial": 1, "Dropped": 1},
-                                                             outcome="Stopped because the list query needs a database the budget did not cover."))
+                                                             outcome="Stopped because the list query needs a staging database only the owner can provision."))
 
     def test_done_with_a_partial_row_fails(self):
         repo = self.make_final_run()

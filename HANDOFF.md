@@ -8,7 +8,7 @@ process: intake and classification, research, specification, design, test planni
 implementation, independent adversarial verification, UI verification with vision, state files,
 failure investigation distilled into lessons, and a final audit.
 
-Last updated 2026-09-15 by the coordinating session, after the post-run fixes.
+Last updated 2026-09-16 by the coordinating session, after budgets became checkpoints.
 
 ## The lean default (2026-09-15)
 
@@ -35,9 +35,20 @@ reviewing, which should give output close to Fable's for roughly half the spend.
   GOAL.md and no mode line is rigorous), and in lean mode the lint, the Stop gate, and `end` check only
   STATE.md's status, next step, and timestamp (plus hygiene at `end`); the snapshot hook takes no tree
   snapshots. `skill/scripts/tests/test_lean_mode.py` proves lean runs are not held by rigorous gates.
-- **Not yet proven.** No lean run has happened. The lean envelopes in `references/models.md` (small
-  fix under $5, feature under $25, build M under $80) are targets, and the two new eval cases
-  (`lean-feature-plan`, `lean-learning-entry`) have not been scored.
+- **Budgets are checkpoints (2026-09-16).** The first lean run stopped itself at a $120 hard stop
+  with one of nine packages verified, so the hard stop is gone. The budget line records a target;
+  when the recorded spend reaches it, and at each further multiple, the run commits and pushes what
+  is reviewed, refreshes STATE.md, LEARNINGS.md, and REPORT.md with what is done and what remains,
+  and continues. The only early ending is a `stop:` line the owner wrote (a dollar figure, a wall
+  clock, or a date), in GOAL.md or, for a lean run, in STATE.md. `drive.py` holds a running run once
+  that line is reached, refuses `Blocked on: budget:` and a report that stops on spend before then,
+  and only warns on any spend or spawn figure. The lean orchestrator pushes its branch after every
+  reviewed package, and STATE.md names the next package and the last pushed commit, so a run that
+  loses its process resumes from the repository alone.
+- **Not yet proven.** One lean run has happened and it was cut short by the old hard stop. The lean
+  envelopes in `references/models.md` (small fix under $5, feature under $25, build M under $80) are
+  targets to checkpoint at, not stops, and the two new eval cases (`lean-feature-plan`,
+  `lean-learning-entry`) have not been scored.
 
 ## Where things stand
 

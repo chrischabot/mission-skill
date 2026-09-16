@@ -315,8 +315,10 @@ red-to-green iteration is not one.
 
 ## 9. Stopping and the report
 
-**Stop conditions.** The run is Done by the ladder and the final audit agrees; a budget bound was
-reached; the goal is impossible as stated; the next step is destructive and not implied by the
+**Stop conditions.** The run is Done by the ladder and the final audit agrees; the `stop:` line the
+owner wrote in GOAL.md was reached (a dollar figure against the recorded spend, a wall clock, or a
+date; the budget line itself is a checkpoint and never a reason to stop); the goal is impossible as
+stated; the next step is destructive and not implied by the
 goal; the next step needs credentials, payment, legal acceptance, or account creation; or the same
 failure survived two distinct diagnoses. In every case, first finish all work that does not depend
 on the blocker. No status ends a turn by being declared:
@@ -324,7 +326,7 @@ on the blocker. No status ends a turn by being declared:
 | Status | The Stop gate lets the turn end when |
 |---|---|
 | `done`, `stopped` | `lint --final` passes, reading the passing full-suite run it recorded for the latest code commit; a `stopped` run with any row above Missing needs a transcript-backed final audit with `verdict: pass` too |
-| `blocked` | "Blocked on" begins with `budget:`, `impossible:`, `destructive:`, `credentials:`, `payment:`, `legal:`, `account:`, `two-diagnoses:`, or `soak:` followed by the condition in words, and REPORT.md says "Stopped because"; `budget:` counts only once maker spawns reached the subagent figure on GOAL.md's budget line or a DECISIONS.md entry added since intake has a `Decision:` line that begins with `Stop` or `Narrow` and names the budget, and `credentials:` must name the secret as an uppercase identifier containing an underscore or ending in `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `PAT`, `CREDENTIALS`, or `CERT` (`credentials: CLOUDFLARE_API_TOKEN`), or as a name of two or more letters in backquotes or double quotes; or it begins `launch preflight:` after `drive.py preflight` recorded a failure in this session, and quotes the `claude` relaunch command in backticks or quotes |
+| `blocked` | "Blocked on" begins with `budget:`, `impossible:`, `destructive:`, `credentials:`, `payment:`, `legal:`, `account:`, `two-diagnoses:`, or `soak:` followed by the condition in words, and REPORT.md says "Stopped because"; `budget:` counts only once the `stop:` line the owner wrote in GOAL.md is reached, and `credentials:` must name the secret as an uppercase identifier containing an underscore or ending in `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `PAT`, `CREDENTIALS`, or `CERT` (`credentials: CLOUDFLARE_API_TOKEN`), or as a name of two or more letters in backquotes or double quotes; or it begins `launch preflight:` after `drive.py preflight` recorded a failure in this session, and quotes the `claude` relaunch command in backticks or quotes |
 | `aborted` | REPORT.md exists and a DECISIONS.md entry's `Decision:` line begins with `Abort` or `Aborted` followed by punctuation or the line's end (`Decision: Abort; <why>`) |
 | `stalled` | the gate set it itself, after six blocked stops with no change to STATE.md (apart from `updated:`), STATUS.md, HEAD, or the working tree, and STATE.md is unchanged since |
 
@@ -335,12 +337,16 @@ commit STATE.md, REPORT.md, and the rest of `.drive/` first, and leave no branch
 untracked or dirty path the run created. The Stop gate still lets a blocked or stalled turn end on a
 dirty tree; only `end` refuses it.
 
-**Budget.** GOAL.md carries the envelope, including a subagent count the lint checks at every gate
-against maker spawns only (implementer, writer, designer, architect, researcher; reviews are never
-counted): a warning past the count, and a failure past twice it until a DECISIONS.md entry records
-the budget overrun with a `Narrows:` line naming what was cut. At a phase's cap, log the overrun and choose in order: drop optional claims, narrow live proof to
-the critical path, accept Local Proof with a named reason for specific claims, or stop. Every
-narrowing is a logged decision and appears in the report.
+**Budget.** GOAL.md carries the target: a dollar figure, and a subagent count the lint checks at
+every gate against maker spawns only (implementer, writer, designer, architect, researcher; reviews
+are never counted). Both are checkpoints, not stops. Past either, the lint warns, and the run commits
+and pushes what is reviewed, updates STATE.md, refreshes REPORT.md with what is done and what remains,
+and continues, again at each further multiple; nothing about spend fails a gate or ends the run.
+Narrowing (dropping optional claims, narrowing live proof to the critical path, accepting Local Proof
+with a named reason) is a logged decision about scope, never a response to spend, and appears in the
+report. The one early ending is the `stop:` line the owner wrote in GOAL.md: when it is reached,
+spawn nothing new, commit what passes, write the report opening "Stopped because" the owner's stop
+line was reached, and set `status: stopped`.
 
 **Report.** Write `.drive/REPORT.md` from `templates/REPORT.md`, derived from STATUS, STATE,
 DECISIONS, LESSONS, and the proofs, never from memory of the run: what is needed from the owner, as

@@ -518,22 +518,23 @@ class ReviewerAndMakerWriteTests(Hooks, DriveTestCase):
 
 
 class BudgetTests(Hooks, DriveTestCase):
-    """Should-fix 5: the budget counts makers, and a recorded overrun clears the failure."""
+    """The subagent figure counts makers only and is a checkpoint: past it, even past twice it, the lint warns and names
+    the checkpoint work, and nothing about spend fails a gate."""
 
-    def test_reviewer_spawns_do_not_count_and_a_recorded_overrun_turns_the_failure_into_a_warning(self):
+    def test_reviewer_spawns_do_not_count_and_maker_spawns_past_the_figure_only_warn(self):
         repo = self.make_run()
         for number in range(30):
             drive.ledger_append(repo, {"kind": "spawn", "agent_type": "drive:verifier", "agent_id": "v-{}".format(number)})
-        self.assertNoFailure(self.lint(repo, gate="build"), "past twice")
+        findings = self.lint(repo, gate="build")
+        self.assertNoFailure(findings, "maker subagents")
+        self.assertNotIn("maker subagents", self.messages(findings, "warn"))
         for number in range(17):
             drive.ledger_append(repo, {"kind": "spawn", "agent_type": "drive:implementer", "agent_id": "i-{}".format(number)})
-        self.assertFails(self.lint(repo, gate="build"), "past twice its envelope")
-        with open(repo / ".drive/DECISIONS.md", "a", encoding="utf-8") as handle:
-            handle.write("\n## 2026-09-14 · Record the subagent budget overrun\n- Decision: finish the auth package past the budget.\n"
-                         "- Undo: stop the run · reversal cost: low.\n- Narrows: the admin screen moves to the next run\n")
         findings = self.lint(repo, gate="build")
-        self.assertNoFailure(findings, "past twice")
-        self.assertIn("maker subagents have started", self.messages(findings, "warn"))
+        self.assertNoFailure(findings, "maker subagents")
+        warnings = self.messages(findings, "warn")
+        self.assertIn("17 maker subagents have started against a target of 8", warnings)
+        self.assertIn("checkpoint", warnings)
 
 
 class SnapshotBudgetTests(Hooks, DriveTestCase):

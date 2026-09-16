@@ -2236,6 +2236,128 @@ def earliest_open_plan_line(goal, phase):
     return (lines[first][0], lines[first][1], open_phase) if later else None
 
 
+# ---- The budget target and the owner's stop: line ----
+# A budget line names a target: recorded spend reaching it, or any further multiple of it, is a checkpoint (commit and
+# push what is reviewed, refresh STATE.md, LEARNINGS.md, and REPORT.md) and the run continues. The one early ending is
+# a stop: line the owner wrote, in GOAL.md or, for a lean run, in STATE.md: a dollar figure judged against the recorded
+# spend, a wall clock judged against the run marker's start, or a date judged against the clock.
+STOP_DOLLAR_RE = re.compile(r"(?i)\$\s*(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*(?:usd|dollars?)\b")
+STOP_CLOCK_RE = re.compile(r"(?i)(?<![\d\-:.])(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?|h|days?|d|weeks?|w)\b")
+STOP_DATE_RE = re.compile(r"(?<![\d\-])(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2})?)Z?)?(?![\d\-])")
+CLOCK_HOURS = {"m": 1 / 60.0, "h": 1.0, "d": 24.0, "w": 168.0}
+SPEND_STOP_WORDS_RE = re.compile(r"(?i)\bbudget|\benvelope|\bspen[dt]\b|\bcost|\$\s*\d|\d\s*(?:usd|dollars?)\b")
+STOP_NONE = ("", "none", "no", "never", "-")
+
+
+def dollar_figures(text):
+    """Every dollar figure in `text`, in order ("$25", "20 usd", "$1,200.50")."""
+    values = []
+    for match in STOP_DOLLAR_RE.finditer(text or ""):
+        try:
+            values.append(float((match.group(1) or match.group(2)).replace(",", "")))
+        except ValueError:
+            continue
+    return values
+
+
+def header_field(root, name):
+    """`name:` from the header of GOAL.md, then of STATE.md, or an empty string."""
+    drive = Path(root) / ".drive"
+    for file in ("GOAL.md", "STATE.md"):
+        text = read_text(drive / file)
+        if text is None:
+            continue
+        value = Doc(text).fields().get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def stop_line(root):
+    """The owner's stop: line, or an empty string when there is none."""
+    value = header_field(root, "stop")
+    return "" if value.lower().rstrip(".") in STOP_NONE else value
+
+
+def budget_target(root):
+    """The dollar target on the budget line: the last figure it names, so a range counts its top. None when it names none."""
+    figures = dollar_figures(header_field(root, "budget"))
+    return figures[-1] if figures else None
+
+
+def recorded_spend(root):
+    """The run's recorded spend in dollars: the first figure on STATE.md's spend: line, or the largest leg total written to
+    .drive/local/run.md as "spent $<n>"; None when neither records one."""
+    figures = []
+    text = read_text(Path(root) / ".drive" / "STATE.md")
+    for line in (text or "").splitlines():
+        match = SPEND_LINE_RE.search(line)
+        if match:
+            figures.extend(dollar_figures(match.group(1).split(" · ")[0])[:1])
+            break
+    for match in re.finditer(r"(?i)\bspent\s+\$\s*(\d[\d,]*(?:\.\d+)?)", read_text(Path(root) / ".drive" / "local" / "run.md") or ""):
+        figures.append(float(match.group(1).replace(",", "")))
+    return max(figures) if figures else None
+
+
+def stop_reached(root):
+    """Why the owner's stop: line is reached, or None when there is no line or it is not reached yet."""
+    line = stop_line(root)
+    if not line:
+        return None
+    now = now_utc()
+    figures = dollar_figures(line)
+    if figures:
+        spend = recorded_spend(root)
+        if spend is not None and spend >= figures[0]:
+            return "the stop line names ${:g} and the recorded spend is ${:g}".format(figures[0], spend)
+    date = STOP_DATE_RE.search(line)
+    if date:
+        clock = date.group(2) or "00:00"
+        when = parse_iso(date.group(1) + "T" + clock + ("" if clock.count(":") == 2 else ":00") + "Z")
+        if when is not None and now >= when:
+            return "the stop line names {} and it is now {}".format(date.group(0), iso_now())
+    started = parse_iso(str(read_marker(root).get("started", "")))
+    if started is not None:
+        for match in STOP_CLOCK_RE.finditer(line):
+            hours = float(match.group(1)) * CLOCK_HOURS[match.group(2)[0].lower()]
+            elapsed = (now - started).total_seconds() / 3600.0
+            if elapsed >= hours:
+                return "the stop line names {} and the run started {:.1f} h ago at {}".format(
+                    match.group(0), elapsed, started.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    return None
+
+
+def check_stop_and_budget(ctx, f):
+    """The one budget rule in both modes: a reached stop: line fails a running run until it stops, a passed budget target
+    is a warning naming the checkpoint work, and a report that stops the run on spend with no stop line reached fails."""
+    status = ctx.state.status if ctx.state else ""
+    reason = stop_reached(ctx.root)
+    if reason and status in GATE_CLOSED:
+        f.fail("stop line", "the owner's stop line is reached: {}. Spawn nothing new, commit and push what passes, write "
+               "REPORT.md opening 'Stopped because the owner's stop line was reached', and set status: stopped.".format(reason))
+    line = stop_line(ctx.root)
+    if line and dollar_figures(line) and recorded_spend(ctx.root) is None:
+        f.warn("stop line", "names a dollar figure ('{}') but no spend is recorded, so it cannot be judged. Write STATE.md's "
+               "spend: line from total_cost_usd, /usage, or the harness budget line after each wave.".format(line))
+    target = budget_target(ctx.root)
+    spend = recorded_spend(ctx.root)
+    if target and spend is not None and spend >= target and status in GATE_CLOSED:
+        f.warn("budget", "recorded spend ${:g} has passed the budget target ${:g} ({} time{}). A checkpoint is due at each "
+               "multiple: commit and push everything reviewed, update STATE.md and LEARNINGS.md, write or refresh REPORT.md "
+               "with what is done and what remains, then continue. The target is a checkpoint, not a stop.".format(
+                   spend, target, int(spend // target), "" if int(spend // target) == 1 else "s"))
+    if status in ("stopped", "blocked") and not reason:
+        report = read_text(ctx.drive / "REPORT.md")
+        outcome = " ".join(l.strip() for _, l in Doc(report or "").sections.get("Outcome", []) if l.strip())
+        if outcome.startswith("Stopped because"):
+            first = re.split(r"(?<=[.;])\s", outcome, maxsplit=1)[0]
+            if SPEND_STOP_WORDS_RE.search(first):
+                f.fail("REPORT.md", "stops the run on spend ('{}'), but no stop: line the owner wrote is reached. A budget "
+                       "is a checkpoint, not a stop: do the checkpoint, set status: running, and continue the "
+                       "plan.".format(first[:140]))
+
+
 SPEND_FILES = ("RESEARCH.md", "STATE.md", "REPORT.md")
 SPEND_LINE_RE = re.compile(r"(?i)\bspend:\s*(.*)$")
 DOLLAR_FIGURE_RE = re.compile(r"(?i)\$\s*\d|\b\d[\d,]*(?:\.\d+)?\s*(?:usd|dollars)\b")
@@ -2848,31 +2970,18 @@ def require_rung(ctx, f, rung, only_live=False):
             f.fail("STATUS {}".format(row.key), "is {}; this gate needs {} or above.".format(row.status, target))
 
 
-def overrun_recorded(ctx):
-    """A DECISIONS.md entry that records the budget overrun and names on its Narrows: line what was cut."""
-    _, entries = decision_entries(read_text(ctx.drive / "DECISIONS.md") or "")
-    for heading, lines in entries:
-        body = heading + "\n" + "\n".join(l for _, l in lines)
-        narrows = next((l.split(":", 1)[1].strip() for _, l in lines if l.strip().startswith("- Narrows:")), "")
-        if re.search(r"(?i)budget|overrun|envelope", body) and narrows and narrows.lower().rstrip(".") != "none":
-            return True
-    return False
-
-
 def spawn_budget_check(ctx, f):
-    """GOAL.md's subagent budget counts maker spawns (implementer, writer, designer, architect, researcher): reviews are
-    the ceremony a size requires and never the reason to cut work. Warn past the budget; fail past twice it until
-    DECISIONS.md records the overrun with a Narrows: line naming what was cut."""
+    """GOAL.md's subagent figure counts maker spawns (implementer, writer, designer, architect, researcher): reviews are
+    the ceremony a size requires and never the reason to cut work. The figure is a checkpoint, not a stop, so passing it
+    is a warning that names the checkpoint work; nothing about spend fails a gate or ends a run (SKILL.md section 8)."""
     allowed, makers, reviewers = maker_spawn_counts(ctx.root, ctx.goal)
     if allowed is None:
         return
-    if makers > 2 * allowed and not overrun_recorded(ctx):
-        f.fail("GOAL.md budget", "{} maker subagents have started against a budget of {} (reviewers, {} so far, are not counted); "
-               "the run is past twice its envelope. Record the overrun in DECISIONS.md with a Narrows: line naming what "
-               "was cut, then continue with the narrower plan or stop.".format(makers, allowed, reviewers))
-    elif makers > allowed:
-        f.warn("GOAL.md budget", "{} maker subagents have started against a budget of {} (reviewers, {} so far, are not "
-               "counted). Log the overrun and narrow before spawning more.".format(makers, allowed, reviewers))
+    if makers > allowed:
+        f.warn("GOAL.md budget", "{} maker subagents have started against a target of {} (reviewers, {} so far, are not "
+               "counted). The target is a checkpoint: commit and push what is reviewed, update STATE.md and LEARNINGS.md, "
+               "write or refresh REPORT.md with what is done and what remains, then continue. Only the owner's stop: line "
+               "ends a run early.".format(makers, allowed, reviewers))
 
 
 def maker_spawn_counts(root, goal):
@@ -3500,6 +3609,8 @@ def run_lint(root, mode="base", gate=None, run_commands=True, sub=None, suite_ti
     ctx.mode = run_mode(ctx.root)
     if ctx.mode == "lean":
         check_lean_state(ctx, f)
+        check_stop_and_budget(ctx, f)
+        check_spend(ctx, f)
         return ctx, f
     check_goal(ctx, f, mode)
     check_state(ctx, f, mode)
@@ -3512,6 +3623,7 @@ def run_lint(root, mode="base", gate=None, run_commands=True, sub=None, suite_ti
     check_packages(ctx, f)
     check_constraints(ctx, f)
     check_spend(ctx, f)
+    check_stop_and_budget(ctx, f)
     check_secrets(ctx, f)
     check_placeholders(ctx, f)
     check_frozen(ctx, f)
@@ -3953,13 +4065,12 @@ def init_lean(root, drive, slug, goal_text, old_goal, session_id):
         print("Paused the previous run at {}; its restore steps are in RESTORE.md.".format(archived.relative_to(root)))
     if ignored:
         print("Added to .gitignore: {}.".format(", ".join(ignored)))
-    print("Next: set STATE.md's budget line, then spawn drive:planner to write .drive/PLAN.md.")
+    print("Next: set STATE.md's budget target and stop line, then spawn drive:planner to write .drive/PLAN.md.")
     return 0
 
 
 # Abort or Aborted, then punctuation or the end of the line: "Abort; the owner ended the run", never "Abort not needed".
 ABORT_DECISION_RE = re.compile(r"(?i)^abort(ed)?\s*([;:,.]|$)")
-BUDGET_DECISION_RE = re.compile(r"(?i)^(stop|narrow)")
 # A named secret after credentials:: an uppercase identifier that contains an underscore or ends in a secret word, or a
 # name of at least two letters in backquotes or double quotes. Words that name nothing are refused in every form.
 SECRET_IDENTIFIER_RE = re.compile(r"(?<![A-Za-z0-9_])[A-Z][A-Z0-9_]*(?![A-Za-z0-9_])")
@@ -3999,45 +4110,17 @@ def decision_fields(lines):
     return Doc("").fields([(n, l[2:]) for n, l in lines if l.startswith("- ")])
 
 
-def decisions_since_intake(root, goal):
-    """[(heading, fields)] for the DECISIONS.md entries added since the drive(intake) commit. Entries are compared by
-    heading and body, each intake entry matching one current entry, so a new entry that reuses an old heading counts."""
-    text = read_text(Path(root) / ".drive" / "DECISIONS.md") or ""
-    before = {}
-    if goal is not None and goal.slug and has_head(root):
-        intake = git_out(root, "log", "--grep", "^drive(intake): {}$".format(goal.slug), "--format=%H", "-1")
-        old = show_at(root, intake, ".drive/DECISIONS.md") if intake else None
-        for heading, lines in decision_occurrences(old or ""):
-            key = (heading, tuple(l.rstrip() for _, l in lines if l.strip()))
-            before[key] = before.get(key, 0) + 1
-    added = []
-    for heading, lines in decision_occurrences(text):
-        key = (heading, tuple(l.rstrip() for _, l in lines if l.strip()))
-        if before.get(key):
-            before[key] -= 1
-            continue
-        added.append((heading, decision_fields(lines)))
-    return added
-
-
 def budget_stop_problems(root):
-    """Why 'Blocked on: budget:' does not count yet: the maker spawns have not reached GOAL.md's subagent figure and no
-    DECISIONS.md entry since intake has a Decision: line that begins with Stop or Narrow and names the budget."""
-    goal_text = read_text(Path(root) / ".drive" / "GOAL.md")
-    goal = Goal(goal_text) if goal_text is not None else None
-    allowed, makers, _ = maker_spawn_counts(root, goal)
-    if allowed is not None and makers >= allowed:
+    """Why 'Blocked on: budget:' does not count yet: the owner's stop: line (GOAL.md, then STATE.md) is absent or not
+    reached. A budget target is a checkpoint, and nothing the run decides about spend ends it early."""
+    if stop_reached(root):
         return []
-    for _, fields in decisions_since_intake(root, goal):
-        decision = fields.get("decision", "").strip()
-        if BUDGET_DECISION_RE.match(decision) and re.search(r"(?i)\bbudget", decision):
-            return []
-    return ["Blocked on 'budget:' counts only once the budget is spent: {} maker subagent(s) have started against {}, and no "
-            "DECISIONS.md entry added since intake has a Decision: line that begins with 'Stop' or 'Narrow' and names the "
-            "budget. Continue the work, or record that decision (for example 'Decision: Stop; the budget no longer covers "
-            "the admin screen') before stopping on it".format(
-                makers, "GOAL.md's budget of {} subagents".format(allowed) if allowed is not None else
-                "a GOAL.md budget line with no subagent figure")]
+    line = stop_line(root)
+    where = "the stop line '{}' is not reached yet".format(line) if line else "GOAL.md and STATE.md carry no stop: line"
+    return ["Blocked on 'budget:' counts only once the owner's stop: line is reached (a dollar figure against the recorded "
+            "spend, a wall clock against the run's start, or a date), and {}. A budget target is a checkpoint, not a stop: "
+            "commit and push what is reviewed, refresh STATE.md, LEARNINGS.md, and REPORT.md, and continue the "
+            "plan".format(where)]
 
 
 def stopped_because(root):
@@ -5959,6 +6042,26 @@ def goal_records_deploy(root, command_words):
     return False
 
 
+PLAIN_PUSH_FLAGS = {"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose", "--porcelain", "--progress", "--no-progress"}
+
+
+def plain_push_problem(args, git_cwd):
+    """Why a push is not the plain one a lean orchestrator may make (the current branch to its upstream, never forced,
+    never another ref), or None when it is."""
+    for arg in args:
+        if arg.startswith("-") and arg not in PLAIN_PUSH_FLAGS:
+            return "'{}' is not allowed on the run's push".format(arg)
+    positional = [a for a in args if not a.startswith("-")]
+    if len(positional) > 2:
+        return "a push names at most the remote and the current branch"
+    if len(positional) == 2:
+        branch = git_out(git_cwd, "rev-parse", "--abbrev-ref", "HEAD") if is_dir_quietly(git_cwd) else None
+        ref = positional[1]
+        if ":" in ref or ref.startswith("+") or not branch or ref != branch:
+            return "'{}' is not the branch the run is on ({})".format(ref, branch or "unknown")
+    return None
+
+
 def ref_change(sub, args):
     """What a git command does to branches or tags (None when it changes neither)."""
     positional = [a for a in args if not a.startswith("-")]
@@ -6569,8 +6672,8 @@ class Guard:
 
     def shared_refs_reason(self, sub, args, git_cwd):
         if sub == "push":
-            return ("'git push' is blocked: nothing in a drive run pushes, from any directory, for any agent or the main thread; "
-                    "a push is an owner step named in REPORT.md")
+            return ("'git push' is blocked: no agent pushes in any run, and nothing pushes in a rigorous run, from any "
+                    "directory; a push there is an owner step named in REPORT.md")
         what = ref_change(sub, args)
         if what and self.shares_refs(git_cwd):
             return ("{} is blocked: this directory shares the run repository's refs (the same git common directory), so it "
@@ -6578,8 +6681,9 @@ class Guard:
         return None
 
     def orchestrator_git(self, argv, cwd):
-        """The main thread commits on the branch the run started on. It never pushes, never creates or moves a branch or tag
-        in any worktree that shares the run's refs, and adds worktrees only detached under a scratch directory."""
+        """The main thread commits on the branch the run started on. In a lean run it pushes that branch, plain, to its
+        upstream and nothing else; in a rigorous run it never pushes. It never creates or moves a branch or tag in any
+        worktree that shares the run's refs, and adds worktrees only detached under a scratch directory."""
         sub, args, git_cwd = self.git_parts(argv, cwd)
         if not sub:
             return None
@@ -6604,6 +6708,14 @@ class Guard:
         def blocked(what):
             return ("The run commits on the branch it started on and never creates, switches, or pushes branches or leaves a "
                     "worktree outside a scratch directory, so {} is blocked.".format(what))
+        if sub == "push" and run_mode(self.root) == "lean":
+            # A lean run pushes the branch it is on after every reviewed package, so a fresh process can resume from the
+            # repository alone (SKILL.md section 5). Nothing else about the push is allowed.
+            problem = plain_push_problem(args, git_cwd)
+            if problem is None:
+                return None
+            return ("A lean run pushes only the branch it is on, to its upstream, with no force: {}. Any other push is an "
+                    "owner step named in REPORT.md.".format(problem))
         refs = self.shared_refs_reason(sub, args, git_cwd)
         if refs:
             return "The run commits on the branch it started on. {}.".format(refs[0].upper() + refs[1:])

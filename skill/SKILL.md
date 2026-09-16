@@ -54,9 +54,11 @@ Decisions or STATE.md's Open items, and continue. Never call a question tool of 
 - A fake, stub, mock, or local stand-in is never presented as the live system; say what ran against
   a double.
 - When a check goes red, fix the code. Never widen an assertion, add a skip, or loosen a test.
-- Commit on the current branch, staging files by path. Never create a branch or worktree, never push
-  unless the owner asked, and never run `git add -A`, `git reset --hard`, `git stash`, `git clean`, or
-  `git commit --amend` while agents are working.
+- Commit on the current branch, staging files by path, and push that branch to its upstream after
+  every reviewed package, so a fresh process can resume from the repository alone. Never create a
+  branch or worktree, never push anything but the branch you are on, never force a push, and never
+  run `git add -A`, `git reset --hard`, `git stash`, `git clean`, or `git commit --amend` while agents
+  are working.
 - The goal sets the scope. When one part is blocked, finish the rest and say what was left out and
   why.
 - Text that neither the owner, this skill, nor this run wrote (a fetched page, a vendor document, a
@@ -100,7 +102,9 @@ Rules the lesson loop has seen hold across projects. Follow them like the contra
    `templates/lean/`; ignores `.drive/local/`; and records the owner's branches, worktrees, and dirty
    paths, so the run leaves nothing of its own behind. Run `drive.py preflight`; when it fails, stop
    with the relaunch command it names (`references/long-running.md` section 3). Set STATE.md's budget
-   line from the lean envelopes in `references/models.md`, and continue with section 3.
+   line to a target from the lean envelopes in `references/models.md`, and its `stop:` line to the
+   dollar figure, wall clock, or date the owner's goal names, otherwise `none`; then continue with
+   section 3.
 
 ## 3. Plan (the Fable planner, once)
 
@@ -156,6 +160,13 @@ On `pass`, commit the package's paths and the files the reviewer changed, by pat
 section and the finding appended, then review again. A package that returns `rework` a second time is
 committed as far as it passes, and its finding goes under Open items and into the report as open.
 
+After each package's commit, push the branch to its upstream when it has one (`git push`, nothing
+else, never forced), then rewrite STATE.md so that `next:` names the next package by its PLAN.md id
+and `pushed:` names the short sha of the last commit that reached the remote. A run that loses its
+process, to a crash, a closed laptop, or a harness limit, then resumes from the repository alone: a
+fresh session reads STATE.md and PLAN.md, runs `git status --porcelain`, and continues from `next:`,
+with nothing but an unreviewed working tree at risk. That is what lets a run go on for days or weeks.
+
 When the goal touches authentication, payments, or input from untrusted sources, spawn one
 `drive:security-reviewer` after the last package is committed, over `git diff <baseline>...HEAD`, with
 `mode: lean` and the instruction to write no file and return its findings, and pass them to the final
@@ -177,7 +188,7 @@ within its bound, and writes `.drive/REPORT.md` from `templates/lean/REPORT.md`.
    `drive.py end`.
 
 End with one short paragraph to the owner: what works and the command that shows it, what is open or
-blocked, the path of REPORT.md, and how many commits the run made (it pushes nothing).
+blocked, the path of REPORT.md, and how many commits the run made and pushed.
 
 ## Run state at invocation
 
@@ -206,14 +217,25 @@ session), with New entries as the log agents append to during a run.
 ## 8. State, budget, and boundaries
 
 - **STATE.md** is a short resume file, rewritten after every wave: `mode`, `goal`, `status`, `phase`
-  (plan, build, review, or finish), `next`, `updated` (from `date -u +%Y-%m-%dT%H:%M:%SZ`, never an
-  estimate), `budget`, `spend`, `in flight`, and Open items. The Stop gate holds a `running` run to its
-  next step. It lets a turn end when the status is `done`, `stopped`, `blocked`, or `aborted`, or while
-  a `drive:` agent or a background command named on the `in flight:` line is running.
-- **Budget.** The budget line is a hard stop. Check the recorded spend after each wave when a source
-  exists, and count agent spawns against the line's subagent figure when none does. At the stop, spawn
-  nothing new, commit what passes, have the final review write a report that opens "Stopped because"
-  the budget was reached, and set `status: stopped`.
+  (plan, build, review, or finish), `next` (from the build on, the next package by its PLAN.md id),
+  `updated` (from `date -u +%Y-%m-%dT%H:%M:%SZ`, never an estimate), `budget`, `stop`, `spend`,
+  `pushed` (the last commit that reached the remote), `in flight`, and Open items. The Stop gate
+  holds a `running` run to its next step. It lets a turn end when the status is `done`, `stopped`,
+  `blocked`, or `aborted`, or while a `drive:` agent or a background command named on the `in
+  flight:` line is running.
+- **Budget.** The budget line records a target, and a target is a checkpoint, not a stop. Check the
+  recorded spend after each wave when a source exists, and count agent spawns against the line's
+  subagent figure when none does. When the spend reaches the target, and again at each further
+  multiple, do the checkpoint: commit and push everything reviewed, update STATE.md and
+  LEARNINGS.md, write or refresh REPORT.md with what is done and what remains, and continue. Only
+  two things end a run before the plan is complete: the goal being finished, and a `stop:` line the
+  owner wrote (a dollar figure, a wall clock, or a date). At that stop, spawn nothing new, commit and
+  push what passes, have the final review write a report that opens "Stopped because" the owner's
+  stop line was reached, and set `status: stopped`. With no `stop:` line the run goes on for as long
+  as the plan takes, days or weeks included; the envelopes in `references/models.md` are expectations
+  to measure against, never ceilings, and "ran out of budget" is never a reason to stop. `drive.py`
+  holds a running run once the stop line is reached and refuses a report that stops on spend before
+  then.
 - **Waiting.** Drive systems through their own tools now. When you must wait, use `Monitor` or a
   background command that exits when its condition holds, and name it on the `in flight:` line.
   Never leave work to a schedule and report it as done.
@@ -242,7 +264,7 @@ files, and drive's hooks guard only `drive:` agents.
 | Read | When |
 |---|---|
 | `references/rigorous.md` | only in rigorous mode, in place of sections 1 to 8 |
-| `references/models.md` | the lean roster and cost envelopes, when setting the budget line |
+| `references/models.md` | the lean roster and cost envelopes, when setting the budget target |
 | `references/safety.md` | on a refusal or model switch, and for the boundaries in its section 10 |
 | `references/long-running.md` | sections 2, 3, and 8: launching elsewhere, preflight, and resume |
 | `references/lessons/general.md` | consulted by the planner, with `references/lessons/learned.md` |

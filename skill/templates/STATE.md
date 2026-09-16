@@ -17,9 +17,9 @@ harness budget line), or says "not measured". status is running, verifying, bloc
 Stop gate lets a turn end only when: status is done or stopped and lint --final passes; status is
 blocked, Blocked on begins with one of budget:, impossible:, destructive:, credentials:, payment:,
 legal:, account:, two-diagnoses:, or soak: followed by the condition in words, and REPORT.md says
-"Stopped because" (budget: counts only once the maker spawns reach GOAL.md's subagent budget or a
-DECISIONS.md entry added since intake has a Decision: line that begins with Stop or Narrow and names
-the budget, as in "Decision: Stop; the budget no longer covers the admin screen"; credentials: names
+"Stopped because" (budget: counts only once the stop: line the owner wrote in GOAL.md is reached, a
+dollar figure against the recorded spend, a wall clock against the run's start, or a date; the budget
+line itself is a checkpoint, never a stop; credentials: names
 the secret, as in "credentials: CLOUDFLARE_API_TOKEN for the staging deploy", an uppercase name with
 an underscore or ending in TOKEN, KEY, SECRET, PASSWORD, PAT, CREDENTIALS, or CERT, or a name in
 backquotes or double quotes, never NONE or TBD); status is blocked on "launch preflight: <reason>;

@@ -2,11 +2,16 @@
 mode: rigorous
 goal: "<verbatim prompt>"
 live means: <deployed host, device and backend, clean install, or out of scope: reason>
-budget: <turns> turns · <subagents> subagents · <wall clock> · <usd envelope>
+budget: <turns> turns · <subagents> subagents · <wall clock> · <usd target>
+stop: none
 
 <!-- Written at intake and committed as `drive(intake): <slug>` before any other work. The slug names
 the deliverable in one to three words (linkkeeper), passed to drive.py init as --slug, never the goal
-sentence. The usd envelope comes from references/models.md section 7. After that
+sentence. The usd target comes from references/models.md section 7 and is a checkpoint, not a stop:
+when the recorded spend reaches it, and again at each further multiple, the run commits and pushes
+what is reviewed, updates STATE.md, refreshes REPORT.md with what is done and what remains, and
+continues. The stop line is the owner's and is the only thing that ends a run before the plan is
+complete: a dollar figure, a wall clock, or a date, or "none". After that
 the goal line, the restate block, and the intake plan never change: tick plan lines, append to
 reclassifications, append under Re-plans. Every restate value is quoted from the goal in double
 quotes or begins with "assumption:". A run with sub-goals repeats "Classification · <sub-goal slug>"
@@ -17,8 +22,7 @@ project has no such command, and `test_command: none` means no suite, so verdict
 run; replacing a `none` with a real command later needs a DECISIONS.md entry naming it. With
 sub-goals, every STATUS row carries a `sub:<sub-goal slug>` token. The budget's subagent figure, the
 number directly before "subagents", counts maker spawns only (implementer, writer, designer,
-architect, researcher); the lint warns past it and fails past twice it until DECISIONS.md records the
-overrun with a Narrows line. -->
+architect, researcher); the lint warns past it and names the checkpoint work, and never fails on it. -->
 
 
 ## Restate

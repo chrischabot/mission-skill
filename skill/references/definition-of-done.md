@@ -226,8 +226,7 @@ set `status: stopped`.
 `blocked` closes the same way, as stopped, once its Blocked on line begins with a stop-condition
 token (`budget:`, `impossible:`, `destructive:`, `credentials:`, `payment:`, `legal:`, `account:`,
 `two-diagnoses:`, or `soak:`) followed by the condition, and REPORT.md says "Stopped because";
-`budget:` counts only once the maker spawns reached the subagent figure on GOAL.md's budget line or a DECISIONS.md entry
-added since intake has a `Decision:` line that begins with `Stop` or `Narrow` and names the budget, and `credentials:`
+`budget:` counts only once the `stop:` line the owner wrote in GOAL.md is reached, and `credentials:`
 must name the secret as an uppercase identifier containing an underscore or ending in `TOKEN`, `KEY`, `SECRET`,
 `PASSWORD`, `PAT`, `CREDENTIALS`, or `CERT` (`credentials: CLOUDFLARE_API_TOKEN`), or as a name of two or more letters
 in backquotes or double quotes. A
@@ -257,9 +256,9 @@ punctuation or the end of the line, as in `Decision: Abort; <why>`.
   original to Dropped with its decision, so both stay visible.
 - **Never narrow because rounds ran out.** At a loop bound, the row takes the rung its last verdict
   supports and keeps its target; the gap is reported as not done.
-- **Budget pressure narrows in a fixed order**, each step a logged decision that appears in the
-  report: drop optional claims, narrow live proof to the critical path, accept Local Proof for named
-  claims with a reason, stop.
+- **Spend never narrows a claim.** A budget target reached is a checkpoint (commit and push what is
+  reviewed, refresh the state files and the report, continue), and only the `stop:` line the owner
+  wrote ends a run early; at that stop every row keeps its target and the gap is reported as not done.
 - **GOAL.md changes only by appending** to `reclassifications` and `## Re-plans`. Its goal line,
   restate block, and intake plan are never edited.
 

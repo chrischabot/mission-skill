@@ -29,9 +29,12 @@ A lean run passes no per-call `model` override. A package the reviewer returns a
 goes to a fresh Sonnet implementer once, with the finding appended, not to a stronger model.
 
 **Lean cost and time envelopes.** These are targets to measure lean runs against, not figures any
-run has proven yet. Write the dollar figure on STATE.md's budget line as a hard stop.
+run has proven yet, and never ceilings. Write the dollar figure on STATE.md's budget line as the
+target: when the recorded spend reaches it, and again at each further multiple, the run checkpoints
+(commits and pushes what is reviewed, refreshes STATE.md, LEARNINGS.md, and REPORT.md) and
+continues. Only a `stop:` line the owner wrote ends a run early.
 
-| Work | Time | Spend target |
+| Work | Time | Target, checkpoint at |
 |---|---|---|
 | small fix (the XS fast path, no agents) | minutes | under $5 |
 | feature (one plan, a few packages) | under an hour | under $25 |
@@ -210,8 +213,8 @@ call, or a Workflow script.
 
 ## 7. Rigorous cost envelopes
 
-Estimate at intake from the shape and size and write the figure on GOAL.md's `budget:` line. These
-are estimates from a cost model recomputed on 2026-09-14 at September 2026 prices, assuming the
+Estimate at intake from the shape and size and write the figure on GOAL.md's `budget:` line as the
+target the run checkpoints at, never a ceiling. These are estimates from a cost model recomputed on 2026-09-14 at September 2026 prices, assuming the
 roster above, a one-hour orchestrator cache, and the round bounds and verification unit in
 `references/verification.md` sections 2 and 6. They are not quotes; a
 run with more packages, rounds, or UI screens than the typical case lands above them.
@@ -262,22 +265,21 @@ final audit has returned, because a figure taken before it leaves out the most e
 | `report` | $3 to $6 | $10 to $40 | $25 to $60 | $75 to $180 | $180 to $380 |
 | `operate` | $3 to $6 | $10 to $40 | $30 to $100 | $75 to $180 | reclassify |
 
-Add $3 to $10 for the security review and severe tests that the `auth` trait brings to an XS or S run. For a headless launch,
-the top of the range is the cumulative envelope the leg loop in `long-running.md` section 2 enforces
-across legs, and each leg's `--max-budget-usd` is what remains of it. Background sessions have no
-dollar cap, so the subagent count stands in for one. Write it on the budget line
-(`budget: 40 turns · 40 subagents · 3 h · $150 to $350`, the number directly before `subagents`):
-`drive.py lint --gate` counts the maker subagents (`drive:implementer`, `drive:writer`,
-`drive:designer`, `drive:architect`, `drive:researcher`) the hooks recorded starting since `init`,
-warns past the count, and fails past twice the count until a DECISIONS.md entry records the budget
-overrun with a `Narrows:` line naming what was cut. Reviews are never counted, because they are the
-ceremony the size requires, so the count bounds how much building and research a run buys and the
-dollar envelope bounds the rest. At the warning, log the overrun in DECISIONS.md and narrow in the
-order `references/rigorous.md` section 9 gives; at the failure, record the overrun with its `Narrows:` line and
-re-plan within the remaining envelope, or stop. Record each phase's estimate in the plan; when a
-phase spends twice its estimate, stop, record why in STATE.md, and continue only after a re-plan
-in GOAL.md shows the remaining envelope covers the rest. The report states the envelope and the
-recorded spend taken after the final audit. A headless leg's own `total_cost_usd` arrives only when
+Add $3 to $10 for the security review and severe tests that the `auth` trait brings to an XS or S run. The top of the
+range is the target the run checkpoints at; it is not a ceiling. For a headless launch, each leg's
+`--max-budget-usd` caps one session, and the leg loop in `long-running.md` section 2 starts the next
+leg for as long as STATE.md says the run is unfinished and the owner's `stop:` line is not reached.
+Background sessions have no dollar cap, so the subagent count stands in as a second checkpoint
+figure. Write it on the budget line (`budget: 40 turns · 40 subagents · 3 h · $150 to $350`, the
+number directly before `subagents`): `drive.py lint --gate` counts the maker subagents
+(`drive:implementer`, `drive:writer`, `drive:designer`, `drive:architect`, `drive:researcher`) the
+hooks recorded starting since `init` and warns past the count, naming the checkpoint work; nothing
+about spend fails a gate. Reviews are never counted, because they are the ceremony the size
+requires. At a checkpoint, whether the spend or the count reached it, commit and push what is
+reviewed, update STATE.md, refresh REPORT.md with what is done and what remains, and continue; when
+a phase spends twice its estimate, record why in STATE.md and carry on. The one early ending is the
+`stop:` line the owner wrote in GOAL.md. The report states the target and the recorded spend taken
+after the final audit. A headless leg's own `total_cost_usd` arrives only when
 that session ends, so the report gives earlier legs' totals from `.drive/local/run.md` plus the latest
 recorded figure for the current leg with its time, and says the leg's result holds its final figure.
 

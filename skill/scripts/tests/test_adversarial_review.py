@@ -299,30 +299,30 @@ class StoppedRunAuditTests(Hooks, DriveTestCase):
 class StopTokenTests(Hooks, DriveTestCase):
     """Findings 9 and 10: budget:, credentials:, and aborted need evidence, not words."""
 
-    def blocked(self, repo, blocked_on):
+    def blocked(self, repo, blocked_on, spend=None):
         self.set_state(repo, commit=self.code_sha, status="blocked", blocked=blocked_on)
+        if spend:
+            state = (repo / ".drive/STATE.md").read_text()
+            self.write(repo, ".drive/STATE.md", state.replace("model: claude-fable-5-1 · high\n", "model: claude-fable-5-1 · high\nspend: {}\n".format(spend), 1))
         self.write(repo, ".drive/REPORT.md", self.report_md({}, outcome="Stopped because the owner must act."))
         return self.stop(repo)
 
-    def test_budget_counts_once_the_maker_spawns_reach_the_budget(self):
+    def test_budget_counts_once_the_owners_stop_line_is_reached_and_never_on_spawns_or_decisions(self):
         repo = self.make_run()
-        self.assertIn("counts only once the budget is spent", self.blocked(repo, "budget: I think we have done enough")["reason"])
+        for number in range(20):
+            drive.ledger_append(repo, {"kind": "spawn", "agent_type": "drive:implementer", "agent_id": "i-{}".format(number)})
+        self.append_decision(repo, "Stop at the envelope", "stop here, because the budget no longer covers the admin screen.")
+        self.assertIn("counts only once the owner's stop: line is reached", self.blocked(repo, "budget: I think we have done enough")["reason"])
         self.commit(repo, "drive: blocked on budget")
         refused = self.run_drive("end", cwd=repo)
         self.assertEqual(refused.returncode, 1, refused.stdout)
-        self.assertIn("counts only once the budget is spent", refused.stdout)
-        for number in range(8):
-            drive.ledger_append(repo, {"kind": "spawn", "agent_type": "drive:implementer", "agent_id": "i-{}".format(number)})
-        self.assertIsNone(self.stop(repo))
+        self.assertIn("counts only once the owner's stop: line is reached", refused.stdout)
+        goal = (repo / ".drive/GOAL.md").read_text().replace("\nbudget:", "\nstop: $50\nbudget:", 1)
+        self.write(repo, ".drive/GOAL.md", goal)
+        self.assertIsNone(self.blocked(repo, "budget: I think we have done enough", spend="$62 from total_cost_usd"))
+        self.commit(repo, "drive: the owner's stop line is reached")
         closed = self.run_drive("end", cwd=repo)
         self.assertEqual(closed.returncode, 0, closed.stdout)
-
-    def test_budget_counts_a_decision_since_intake_that_says_budget_on_its_decision_line(self):
-        repo = self.make_run()
-        self.append_decision(repo, "Budget overrun on the admin screen", "finish the list query first.")
-        self.assertIn("counts only once", self.blocked(repo, "budget: the admin screen needs a second run")["reason"])
-        self.append_decision(repo, "Stop at the envelope", "stop here, because the budget no longer covers the admin screen.")
-        self.assertIsNone(self.blocked(repo, "budget: the admin screen needs a second run"))
 
     def test_credentials_must_name_the_secret(self):
         repo = self.make_run()

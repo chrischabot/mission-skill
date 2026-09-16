@@ -119,7 +119,8 @@ status: running
 phase: build
 next: Spawn drive:implementer for P1, then drive:reviewer for P1.
 updated: 2026-09-12T09:20:00Z
-budget: $25 hard stop · 1 h · 8 subagents
+budget: $25 target · 1 h · 8 subagents
+stop: none
 spend: not measured
 in flight: none
 
